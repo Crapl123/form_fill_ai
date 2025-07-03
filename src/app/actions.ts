@@ -115,8 +115,12 @@ export async function processForm(
       sheetData: masterData,
     });
     
+    if (!mappedData) {
+      return { ...prevState, status: "error", message: "AI failed to map fields from your master data. Please check the files." };
+    }
+    
     const missingFields = Object.entries(mappedData)
-      .filter(([_, value]) => value === "")
+      .filter(([_, value]) => value === "" || value === null || value === undefined)
       .map(([key, _]) => key);
 
     if (missingFields.length > 0) {

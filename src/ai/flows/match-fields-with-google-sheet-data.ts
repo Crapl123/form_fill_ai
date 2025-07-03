@@ -52,6 +52,7 @@ const matchFieldsWithSheetDataFlow = ai.defineFlow(
   },
   async input => {
     const {output} = await prompt(input);
-    return output!;
+    // Ensure we always return an object, even if the AI fails to produce output.
+    return output || {};
   }
 );
