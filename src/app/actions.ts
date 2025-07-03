@@ -100,9 +100,17 @@ async function handleInitialUpload(prevState: FormState, formData: FormData): Pr
         let excelContent = "";
         worksheet.eachRow({ includeEmpty: true }, (row) => {
           row.eachCell({ includeEmpty: true }, (cell) => {
-            // CRITICAL FIX: Use nullish coalescing operator (??) to prevent crash on merged cells.
-            // Merged cells can have a null `text` property, which causes `toString()` to be called on null.
-            excelContent += `Cell: ${cell.address}, Value: '${cell.text ?? ''}'\n`;
+            // DEFINITIVE FIX for merged cell crash:
+            // The stack trace confirms a crash inside exceljs when accessing `.text` on a "slave" merged cell.
+            // These slave cells have a type of `1` (ExcelJS.ValueType.Merge).
+            // We must check the cell type *before* accessing `.text` to prevent the crash.
+            // The master cell of the merge range has a different type and will be processed correctly.
+            let text = '';
+            // ExcelJS.ValueType.Merge has an enum value of 1.
+            if (cell.type !== 1) { 
+                text = cell.text ?? '';
+            }
+            excelContent += `Cell: ${cell.address}, Value: '${text}'\n`;
           });
         });
 
