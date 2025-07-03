@@ -16,6 +16,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
   Tabs,
   TabsContent,
   TabsList,
@@ -32,6 +41,8 @@ import {
   CheckCircle2,
   Database,
   HelpCircle,
+  ListChecks,
+  ArrowRight,
 } from "lucide-react";
 import { processForm } from "./actions";
 import { useToast } from "@/hooks/use-toast";
@@ -126,6 +137,7 @@ export default function Home() {
         setMasterDataFile(selectedFile);
         setMasterData(null);
         setMasterDataStatus("idle");
+        setCurrentTab("master-data");
       } else {
         setMasterDataFile(null);
         toast({
@@ -190,8 +202,8 @@ export default function Home() {
 
       setMasterData(data);
       setMasterDataStatus('success');
-      toast({ variant: "default", title: "Master data parsed!", description: "You can now proceed to step 2." });
-      setCurrentTab("fill-form");
+      toast({ variant: "default", title: "Master data parsed!", description: "Please review your data before proceeding." });
+      setCurrentTab("preview-data");
     } catch (error) {
       const message = error instanceof Error ? error.message : "An unknown error occurred during parsing.";
       setMasterDataStatus('error');
@@ -210,14 +222,15 @@ export default function Home() {
           </div>
           <CardTitle className="text-3xl font-bold">Form AutoFill AI</CardTitle>
           <CardDescription className="text-base">
-            Instantly fill any Excel form from your master data sheet in two simple steps.
+            Instantly fill any Excel form from your master data sheet in three simple steps.
           </CardDescription>
         </CardHeader>
 
         <Tabs value={currentTab} onValueChange={setCurrentTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="master-data">Step 1: Upload Master Data</TabsTrigger>
-            <TabsTrigger value="fill-form" disabled={!masterData}>Step 2: Fill Form</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="master-data">Step 1: Upload</TabsTrigger>
+            <TabsTrigger value="preview-data" disabled={!masterData}>Step 2: Preview</TabsTrigger>
+            <TabsTrigger value="fill-form" disabled={!masterData}>Step 3: Fill Form</TabsTrigger>
           </TabsList>
 
           <TabsContent value="master-data">
@@ -248,7 +261,43 @@ export default function Home() {
             </CardContent>
             <CardFooter>
               <Button onClick={handleMasterDataParse} disabled={!masterDataFile || masterDataStatus === 'parsing'} className="w-full" size="lg">
-                {masterDataStatus === 'parsing' ? <><Loader className="mr-2 h-4 w-4 animate-spin" /> Parsing...</> : "Parse & Continue"}
+                {masterDataStatus === 'parsing' ? <><Loader className="mr-2 h-4 w-4 animate-spin" /> Parsing...</> : "Parse & Preview"}
+              </Button>
+            </CardFooter>
+          </TabsContent>
+
+          <TabsContent value="preview-data">
+            <CardContent className="space-y-4 pt-6">
+              <Alert>
+                <ListChecks className="h-4 w-4" />
+                <AlertTitle>Preview Your Data</AlertTitle>
+                <AlertDescription>
+                  Please review the parsed master data below. If it looks correct, proceed to the next step.
+                </AlertDescription>
+              </Alert>
+              <ScrollArea className="h-72 w-full rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[40%]">Field Name</TableHead>
+                      <TableHead>Value</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {masterData && Object.entries(masterData).map(([key, value]) => (
+                      <TableRow key={key}>
+                        <TableCell className="font-medium">{key}</TableCell>
+                        <TableCell>{value}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+            </CardContent>
+            <CardFooter>
+              <Button onClick={() => setCurrentTab("fill-form")} className="w-full" size="lg">
+                Confirm & Continue to Step 3
+                <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </CardFooter>
           </TabsContent>
@@ -319,7 +368,7 @@ export default function Home() {
                     </Button>
                   </a>
                 ) : (
-                   <Button type="submit" disabled={pending} className="w-full" size="lg">
+                   <Button type="submit" disabled={pending || !vendorFormFile} className="w-full" size="lg">
                     {pending ? (
                       <>
                         <Loader className="mr-2 h-4 w-4 animate-spin" />

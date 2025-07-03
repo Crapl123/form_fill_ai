@@ -75,10 +75,15 @@ export async function processForm(
     if (!masterDataJSON) {
       return { ...prevState, status: "error", message: "Master data is missing. Please go back to Step 1." };
     }
-
-    const masterData = JSON.parse(masterDataJSON);
-    if (typeof masterData !== 'object' || masterData === null || Object.keys(masterData).length === 0) {
-        return { ...prevState, status: "error", message: "Master data is invalid or empty. Please re-upload and parse it." };
+    
+    let masterData: Record<string, string>;
+    try {
+        masterData = JSON.parse(masterDataJSON);
+        if (typeof masterData !== 'object' || masterData === null || Object.keys(masterData).length === 0) {
+            return { ...prevState, status: "error", message: "Master data is invalid or empty. Please re-upload and parse it in Step 1." };
+        }
+    } catch (e) {
+        return { ...prevState, status: "error", message: "Failed to parse master data. Please check it in Step 1." };
     }
 
     const fileBuffer = Buffer.from(await file.arrayBuffer());
