@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Tabs,
@@ -29,40 +30,20 @@ import {
   FileSpreadsheet,
   Zap,
   CheckCircle2,
-  XCircle,
   Database,
+  HelpCircle,
 } from "lucide-react";
 import { processForm } from "./actions";
 import { useToast } from "@/hooks/use-toast";
-import { cn } from "@/lib/utils";
 
 const initialState = {
-  status: "idle",
+  status: "idle" as "idle" | "success" | "error" | "processing" | "awaiting-input",
   message: "",
   fileData: null,
   fileName: "",
   mimeType: "",
+  missingFields: undefined,
 };
-
-function SubmitButton() {
-  const { pending } = useFormStatus();
-
-  return (
-    <Button type="submit" disabled={pending} className="w-full" size="lg">
-      {pending ? (
-        <>
-          <Loader className="mr-2 h-4 w-4 animate-spin" />
-          Processing...
-        </>
-      ) : (
-        <>
-          <Zap className="mr-2 h-4 w-4" />
-          Auto-Fill Form
-        </>
-      )}
-    </Button>
-  );
-}
 
 const FileUploadDropzone = ({ file, onFileChange, icon, title, description, inputId, ...props }) => {
   return (
@@ -162,9 +143,11 @@ export default function Home() {
       if (selectedFile && selectedFile.name.endsWith(".xlsx")) {
         setVendorFormFile(selectedFile);
         setDownloadUrl(null);
+        // Reset state if a new file is uploaded
         if (state.status !== "idle") {
-          state.status = "idle";
-          state.message = "";
+           // This is a bit of a hack, we should ideally have a separate reset action
+           initialState.status = "idle";
+           initialState.message = "";
         }
       } else {
         setVendorFormFile(null);
@@ -195,9 +178,9 @@ export default function Home() {
       worksheet.eachRow({ includeEmpty: false }, (row) => {
         const keyCell = row.getCell(1);
         const valueCell = row.getCell(2);
-        const key = keyCell.value?.toString().trim();
+        const key = keyCell.text.trim();
         if (key) {
-          data[key] = valueCell.value?.toString() || '';
+          data[key] = valueCell.text.trim();
         }
       });
 
@@ -273,17 +256,38 @@ export default function Home() {
           <TabsContent value="fill-form">
             <form action={formAction}>
               <CardContent className="space-y-6 pt-6">
-                 <input type="hidden" name="masterData" value={JSON.stringify(masterData ?? {})} />
-                 <FileUploadDropzone
-                    file={vendorFormFile}
-                    onFileChange={handleVendorFormFileChange}
-                    icon={<CloudUpload className="h-10 w-10 text-muted-foreground" />}
-                    title="Upload Vendor Form"
-                    description="Excel files only (.xlsx)"
-                    inputId="file"
-                    name="file"
-                    required
-                 />
+                 {state.status === 'awaiting-input' ? (
+                   <div className="space-y-4">
+                    <Alert>
+                      <HelpCircle className="h-4 w-4" />
+                      <AlertTitle>Missing Information</AlertTitle>
+                      <AlertDescription>{state.message}</AlertDescription>
+                    </Alert>
+                    <input type="hidden" name="is-second-step" value="true" />
+                     <div className="space-y-4 rounded-md border p-4">
+                       {state.missingFields?.map((field) => (
+                         <div key={field} className="grid grid-cols-3 items-center gap-4">
+                            <Label htmlFor={field} className="text-right">{field}</Label>
+                            <Input id={field} name={field} className="col-span-2" required />
+                         </div>
+                       ))}
+                     </div>
+                   </div>
+                 ) : (
+                  <>
+                    <input type="hidden" name="masterData" value={JSON.stringify(masterData ?? {})} />
+                    <FileUploadDropzone
+                        file={vendorFormFile}
+                        onFileChange={handleVendorFormFileChange}
+                        icon={<CloudUpload className="h-10 w-10 text-muted-foreground" />}
+                        title="Upload Vendor Form"
+                        description="Excel files only (.xlsx)"
+                        inputId="file"
+                        name="file"
+                        required
+                    />
+                  </>
+                 )}
                 
                 {pending && (
                   <div className="space-y-4 rounded-md border p-4">
@@ -294,7 +298,7 @@ export default function Home() {
                   </div>
                 )}
                 
-                {state.status === "error" && (
+                {state.status === "error" && state.message && (
                   <Alert variant="destructive">
                     <AlertCircle className="h-4 w-4" />
                     <AlertTitle>Error</AlertTitle>
@@ -309,13 +313,30 @@ export default function Home() {
                     download={state.fileName}
                     className="w-full"
                   >
-                    <Button className="w-full" size="lg" variant="default">
+                    <Button className="w-full" size="lg" variant="default" type="button">
                       <Download className="mr-2 h-4 w-4" />
                       Download Filled Form
                     </Button>
                   </a>
                 ) : (
-                  <SubmitButton />
+                   <Button type="submit" disabled={pending} className="w-full" size="lg">
+                    {pending ? (
+                      <>
+                        <Loader className="mr-2 h-4 w-4 animate-spin" />
+                        Processing...
+                      </>
+                    ) : state.status === 'awaiting-input' ? (
+                       <>
+                        <CheckCircle2 className="mr-2 h-4 w-4" />
+                        Submit & Complete
+                      </>
+                    ) : (
+                      <>
+                        <Zap className="mr-2 h-4 w-4" />
+                        Auto-Fill Form
+                      </>
+                    )}
+                  </Button>
                 )}
               </CardFooter>
             </form>
