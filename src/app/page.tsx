@@ -43,6 +43,7 @@ import {
   HelpCircle,
   ListChecks,
   ArrowRight,
+  Terminal,
 } from "lucide-react";
 import { processForm } from "./actions";
 import { useToast } from "@/hooks/use-toast";
@@ -54,6 +55,7 @@ const initialState = {
   fileName: "",
   mimeType: "",
   missingFields: undefined,
+  debugInfo: undefined,
 };
 
 const FileUploadDropzone = ({ file, onFileChange, icon, title, description, inputId, ...props }) => {
@@ -353,6 +355,18 @@ export default function Home() {
                     <AlertTitle>Error</AlertTitle>
                     <AlertDescription>{state.message}</AlertDescription>
                   </Alert>
+                )}
+
+                {state.status === "error" && state.debugInfo && (
+                   <Alert variant="destructive" className="mt-4">
+                      <Terminal className="h-4 w-4" />
+                      <AlertTitle>Debug Information</AlertTitle>
+                      <AlertDescription>
+                        <ScrollArea className="h-40 w-full">
+                           <pre className="text-xs whitespace-pre-wrap"><code>{state.debugInfo}</code></pre>
+                        </ScrollArea>
+                      </AlertDescription>
+                    </Alert>
                 )}
               </CardContent>
               <CardFooter className="flex flex-col gap-4">

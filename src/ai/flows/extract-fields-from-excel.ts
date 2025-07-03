@@ -29,10 +29,6 @@ const ExtractFieldsFromExcelOutputSchema = z.array(
 export type ExtractFieldsFromExcelOutput = z.infer<typeof ExtractFieldsFromExcelOutputSchema>;
 
 export async function extractFieldsFromExcel(input: ExtractFieldsFromExcelInput): Promise<ExtractFieldsFromExcelOutput> {
-  console.log("\n\n--- AI DEBUG START ---");
-  console.log(">>> [INPUT TO GEMINI] Sending the following structured content for field extraction:");
-  console.log(input.excelContent);
-  console.log("---");
   return extractFieldsFromExcelFlow(input);
 }
 
@@ -78,7 +74,6 @@ function cleanAndExtractJson(rawText: string): string {
   // Try to find a JSON block wrapped in markdown
   const markdownMatch = rawText.match(/```(json)?\s*([\s\S]*?)\s*```/);
   if (markdownMatch && markdownMatch[2]) {
-    console.log(">>> [CLEANING] Found and extracted JSON from markdown block.");
     return markdownMatch[2].trim();
   }
 
@@ -87,11 +82,9 @@ function cleanAndExtractJson(rawText: string): string {
   const jsonEndIndex = rawText.lastIndexOf(']');
 
   if (jsonStartIndex !== -1 && jsonEndIndex !== -1) {
-    console.log(">>> [CLEANING] Found JSON by slicing from first '[' to last ']'.");
     return rawText.substring(jsonStartIndex, jsonEndIndex + 1);
   }
 
-  console.log(">>> [CLEANING] No JSON structure found, returning raw text for parsing attempt.");
   return rawText;
 }
 
@@ -107,13 +100,8 @@ const extractFieldsFromExcelFlow = ai.defineFlow(
     const response = await prompt(input);
     const rawText = response.text;
 
-    console.log("<<< [RAW RESPONSE FROM GEMINI]:");
-    console.log(rawText);
-
     if (!rawText || rawText.trim() === '') {
-      console.error("<<< [ERROR] AI returned an empty or whitespace response.");
-      console.log("--- AI DEBUG END ---\n\n");
-      return []; // Return empty array on empty response
+      throw new Error("AI returned an empty or whitespace response.");
     }
 
     const cleanedJsonString = cleanAndExtractJson(rawText);
@@ -123,20 +111,15 @@ const extractFieldsFromExcelFlow = ai.defineFlow(
       const parsedJson = JSON.parse(cleanedJsonString);
       // Further validation to ensure it's an array
       if (Array.isArray(parsedJson)) {
-        console.log(">>> [SUCCESS] Successfully parsed JSON.");
-        console.log("--- AI DEBUG END ---\n\n");
         return parsedJson;
       } else {
-        console.error("<<< [ERROR] Parsed JSON is not an array:", parsedJson);
-        console.log("--- AI DEBUG END ---\n\n");
-        return [];
+        throw new Error(`Parsed JSON is not an array. Parsed data: ${JSON.stringify(parsedJson, null, 2)}`);
       }
     } catch (e) {
-      console.error("<<< [ERROR] Failed to parse JSON from AI response:", e);
-      console.error("<<< Cleaned response was:", cleanedJsonString);
-      console.log("--- AI DEBUG END ---\n\n");
-      // On parsing failure, return an empty array so the app doesn't crash.
-      return [];
+      // Throw a new, more descriptive error that includes the problematic text
+      throw new Error(
+        `Failed to parse JSON from AI response. \n---CLEANED TEXT (attempted to parse)---\n${cleanedJsonString}\n\n---RAW RESPONSE FROM AI---\n${rawText}`
+      );
     }
   }
 );

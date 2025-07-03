@@ -16,6 +16,7 @@ interface FormState {
   mappedData?: Record<string, string>;
   vendorFormBuffer?: string;
   extractedFields?: ExtractFieldsFromExcelOutput;
+  debugInfo?: string;
 }
 
 // Centralized error state creation with safe logging
@@ -47,6 +48,7 @@ function createErrorState(message: string, error?: unknown): FormState {
         fileData: null,
         fileName: "",
         mimeType: "",
+        debugInfo: errorDetails,
     };
 }
 
@@ -66,7 +68,6 @@ async function handleInitialUpload(prevState: FormState, formData: FormData): Pr
         }
         
         fileBuffer = Buffer.from(await file.arrayBuffer());
-        console.log(`Successfully read uploaded file: ${file.name}, size: ${fileBuffer.length} bytes.`);
         if (fileBuffer.length === 0) {
             return createErrorState("The uploaded file appears to be empty.");
         }
@@ -85,7 +86,6 @@ async function handleInitialUpload(prevState: FormState, formData: FormData): Pr
         if (typeof masterData !== 'object' || masterData === null || Object.keys(masterData).length === 0) {
             return createErrorState("Master data is invalid or empty. Please re-upload and parse it in Step 1.");
         }
-        console.log(`Successfully parsed master data with ${Object.keys(masterData).length} entries.`);
     } catch (e) {
         return createErrorState("Failed to parse master data. Please check the data from Step 1.", e);
     }
@@ -111,7 +111,6 @@ async function handleInitialUpload(prevState: FormState, formData: FormData): Pr
             return createErrorState("The first sheet of the Excel file appears to have no content to analyze.");
         }
 
-        console.log("Sending Excel text content to AI for field extraction...");
         const aiResult = await extractFieldsFromExcel({ excelContent });
         
         // **CRITICAL VALIDATION** to prevent crash from invalid AI response.
@@ -137,8 +136,6 @@ async function handleInitialUpload(prevState: FormState, formData: FormData): Pr
                 mimeType: "",
             };
         }
-
-        console.log(`AI successfully extracted ${extractedFields.length} fields.`);
     } catch (e) {
         // This will catch any errors thrown during the AI call itself.
         return createErrorState("An error occurred during AI field extraction.", e);
@@ -147,7 +144,6 @@ async function handleInitialUpload(prevState: FormState, formData: FormData): Pr
     // --- 4. AI Data Matching ---
     let mappedData: Record<string, string>;
     try {
-        console.log("Sending extracted fields to AI for data matching...");
         mappedData = await matchFieldsWithSheetData({
           formFields: extractedFields.map((f) => f.fieldName),
           sheetData: masterData,
@@ -155,7 +151,6 @@ async function handleInitialUpload(prevState: FormState, formData: FormData): Pr
         if (!mappedData) {
             return createErrorState("AI failed to map fields. The mapping service returned an empty response.");
         }
-        console.log(`AI successfully mapped ${Object.keys(mappedData).length} fields.`);
     } catch(e) {
         return createErrorState("An error occurred during AI data matching.", e);
     }
@@ -166,7 +161,6 @@ async function handleInitialUpload(prevState: FormState, formData: FormData): Pr
       .map(([key, _]) => key);
 
     if (missingFields.length > 0) {
-      console.log(`Found ${missingFields.length} fields missing from master data. Awaiting user input.`);
       return {
         status: "awaiting-input",
         message: "Some data was not found in your master sheet. Please provide the values for the following fields.",
@@ -183,18 +177,15 @@ async function handleInitialUpload(prevState: FormState, formData: FormData): Pr
     // --- 6. Excel Writing & Validation ---
     let filledExcelBuffer: Buffer;
     try {
-        console.log("All fields mapped. Writing data to new Excel file...");
         filledExcelBuffer = await fillExcelData(fileBuffer, extractedFields, mappedData);
         if (!filledExcelBuffer || !(filledExcelBuffer instanceof Buffer) || filledExcelBuffer.length === 0) {
             return createErrorState("The Excel writer failed to generate a valid file. The output was empty or invalid.");
         }
-        console.log(`Successfully created filled Excel file, size: ${filledExcelBuffer.length} bytes.`);
     } catch (e) {
         return createErrorState("Failed to write data to the new Excel file.", e);
     }
 
     // --- 7. Success State Creation ---
-    console.log("Process complete. Returning success state with file data.");
     return {
       status: "success",
       message: "File processed successfully!",
@@ -218,7 +209,6 @@ async function handleSecondaryUpload(prevState: FormState, formData: FormData): 
 
       try {
         vendorFormBuffer = Buffer.from(prevState.vendorFormBuffer, 'base64');
-        console.log("Restored original vendor form buffer for secondary upload.");
       } catch (e) {
         return createErrorState("Failed to restore the original form from session state.", e);
       }
@@ -237,23 +227,19 @@ async function handleSecondaryUpload(prevState: FormState, formData: FormData): 
       if(!allFieldsFilled) {
           return { ...prevState, status: 'awaiting-input', message: 'Please fill all the missing fields before submitting.' };
       }
-      console.log("All missing fields have been filled manually by the user.");
 
       // --- 3. Excel Writing & Validation ---
       let filledExcelBuffer: Buffer;
       try {
-        console.log("Writing manually entered data to new Excel file...");
         filledExcelBuffer = await fillExcelData(vendorFormBuffer, extractedFields, updatedMappedData);
          if (!filledExcelBuffer || !(filledExcelBuffer instanceof Buffer) || filledExcelBuffer.length === 0) {
             return createErrorState("The Excel writer failed to generate a valid file after filling missing data.");
         }
-        console.log(`Successfully created final filled Excel file, size: ${filledExcelBuffer.length} bytes.`);
       } catch (e) {
         return createErrorState("Failed to write the additional user-provided data to the Excel file.", e);
       }
       
       // --- 4. Success State Creation ---
-      console.log("Secondary upload process complete. Returning success state.");
       return {
         status: "success",
         message: "File processed successfully with your additional data!",
@@ -268,14 +254,11 @@ export async function processForm(
   prevState: FormState,
   formData: FormData
 ): Promise<FormState> {
-  console.log("--- processForm action started ---");
   try {
     const isSecondStep = formData.get("is-second-step") === "true";
     if (isSecondStep) {
-      console.log("Handling secondary upload (manual data entry).");
       return await handleSecondaryUpload(prevState, formData);
     } else {
-      console.log("Handling initial upload.");
       return await handleInitialUpload(prevState, formData);
     }
   } catch (error) {
