@@ -18,18 +18,31 @@ interface FormState {
   extractedFields?: ExtractFieldsFromExcelOutput;
 }
 
-// Centralized error state creation with logging
+// Centralized error state creation with safe logging
 function createErrorState(message: string, error?: unknown): FormState {
-    console.error("Creating error state:", message);
+    console.error("Creating error state:", message, "Raw error:", error);
+    let errorMessage = "An unknown error occurred.";
     if (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        console.error("Underlying error:", errorMessage);
-        // Return a more detailed message for debugging purposes
-        message = `${message} - Details: ${errorMessage}`;
+        try {
+            if (error instanceof Error) {
+                errorMessage = error.message;
+            } else {
+                // Safely convert to string, handling potential complex objects
+                errorMessage = JSON.stringify(error);
+            }
+        } catch (stringifyError) {
+            // Fallback if JSON.stringify fails (e.g., circular references)
+            errorMessage = "Could not process the error object.";
+        }
     }
+    
+    // Return a more detailed message for debugging purposes
+    const finalMessage = `${message} - Details: ${errorMessage}`;
+    console.error("Underlying error message:", finalMessage);
+    
     return {
         status: "error",
-        message,
+        message: finalMessage,
         fileData: null,
         fileName: "",
         mimeType: "",
@@ -99,9 +112,16 @@ async function handleInitialUpload(prevState: FormState, formData: FormData): Pr
         console.log("Sending Excel text content to AI for field extraction...");
         extractedFields = await extractFieldsFromExcel({ excelContent });
         
-        if (!extractedFields || !Array.isArray(extractedFields) || extractedFields.length === 0) {
+        // Strict validation after the AI call, as requested.
+        if (!extractedFields || !Array.isArray(extractedFields)) {
+            console.error("AI response for field extraction was null or not an array. Response:", extractedFields);
+            return createErrorState("AI could not extract fields from the Excel. The AI returned a null or invalid format. Please check the file and try again.");
+        }
+
+        if (extractedFields.length === 0) {
             return createErrorState("AI could not detect any fields in the form. Please check the file and ensure it is a proper form.");
         }
+
         console.log(`AI successfully extracted ${extractedFields.length} fields.`);
     } catch (e) {
         return createErrorState("Failed to extract fields from Excel using AI.", e);
@@ -116,6 +136,7 @@ async function handleInitialUpload(prevState: FormState, formData: FormData): Pr
           sheetData: masterData,
         });
         if (!mappedData) {
+            // This case should be rare now, but it's a good safeguard.
             return createErrorState("AI failed to map fields. The mapping service returned an empty response.");
         }
         console.log(`AI successfully mapped ${Object.keys(mappedData).length} fields.`);

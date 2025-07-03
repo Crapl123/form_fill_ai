@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview AI-powered Excel field extraction flow.
@@ -78,6 +77,11 @@ const extractFieldsFromExcelFlow = ai.defineFlow(
   },
   async input => {
     const {output} = await prompt(input);
-    return output || [];
+    // Ensure we always return an array, even if the AI fails to produce output.
+    if (!output || !Array.isArray(output)) {
+      console.warn("AI extraction returned null or invalid format. Defaulting to empty array.");
+      return [];
+    }
+    return output;
   }
 );
