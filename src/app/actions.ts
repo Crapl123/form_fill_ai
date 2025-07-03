@@ -1,3 +1,4 @@
+
 "use server";
 
 import { extractFieldsFromExcel, type ExtractFieldsFromExcelOutput } from "@/ai/flows/extract-fields-from-excel";
@@ -17,50 +18,7 @@ interface FormState {
   extractedFields?: ExtractFieldsFromExcelOutput;
 }
 
-export async function processForm(
-  prevState: FormState,
-  formData: FormData
-): Promise<FormState> {
-  try {
-    const isSecondStep = formData.get("is-second-step") === "true";
-
-    if (isSecondStep) {
-      if (!prevState.vendorFormBuffer || !prevState.extractedFields || !prevState.mappedData || !prevState.missingFields) {
-        return { ...prevState, status: 'error', message: 'Session state lost. Please start over.' };
-      }
-      const vendorFormBuffer = Buffer.from(prevState.vendorFormBuffer, 'base64');
-      const extractedFields = prevState.extractedFields;
-      let updatedMappedData = { ...prevState.mappedData };
-
-      let allFieldsFilled = true;
-      prevState.missingFields.forEach(field => {
-        const value = formData.get(field) as string;
-        if (value && value.trim() !== '') {
-          updatedMappedData[field] = value;
-        } else {
-          allFieldsFilled = false;
-        }
-      });
-      
-      if(!allFieldsFilled) {
-          return { ...prevState, status: 'awaiting-input', message: 'Please fill all the missing fields before submitting.' };
-      }
-
-      const filledExcelBuffer = await fillExcelData(vendorFormBuffer, extractedFields, updatedMappedData);
-
-      return {
-        status: "success",
-        message: "File processed successfully with your additional data!",
-        fileData: filledExcelBuffer.toString("base64"),
-        fileName: `filled-${prevState.fileName}`,
-        mimeType: prevState.mimeType,
-        missingFields: undefined,
-        mappedData: undefined,
-        vendorFormBuffer: undefined,
-        extractedFields: undefined,
-      };
-    }
-
+async function handleInitialUpload(prevState: FormState, formData: FormData): Promise<FormState> {
     const file = formData.get("file") as File;
     const masterDataJSON = formData.get("masterData") as string | null;
 
@@ -139,6 +97,10 @@ export async function processForm(
     
     const filledExcelBuffer = await fillExcelData(fileBuffer, extractedFields, mappedData);
 
+    if (!filledExcelBuffer) {
+        throw new Error("The Excel writer failed to generate a file buffer.");
+    }
+
     const filledFileName = `filled-${file.name}`;
 
     return {
@@ -148,6 +110,62 @@ export async function processForm(
       fileName: filledFileName,
       mimeType: file.type,
     };
+}
+
+async function handleSecondaryUpload(prevState: FormState, formData: FormData): Promise<FormState> {
+     if (!prevState.vendorFormBuffer || !prevState.extractedFields || !prevState.mappedData || !prevState.missingFields) {
+        return { ...prevState, status: 'error', message: 'Session state lost. Please start over.' };
+      }
+      const vendorFormBuffer = Buffer.from(prevState.vendorFormBuffer, 'base64');
+      const extractedFields = prevState.extractedFields;
+      let updatedMappedData = { ...prevState.mappedData };
+
+      let allFieldsFilled = true;
+      prevState.missingFields.forEach(field => {
+        const value = formData.get(field) as string;
+        if (value && value.trim() !== '') {
+          updatedMappedData[field] = value;
+        } else {
+          allFieldsFilled = false;
+        }
+      });
+      
+      if(!allFieldsFilled) {
+          // Re-render the form with a message to fill all fields.
+          // The missingFields are the same, so we can reuse them from prevState.
+          return { ...prevState, status: 'awaiting-input', message: 'Please fill all the missing fields before submitting.' };
+      }
+
+      const filledExcelBuffer = await fillExcelData(vendorFormBuffer, extractedFields, updatedMappedData);
+      
+      if (!filledExcelBuffer) {
+        throw new Error("The Excel writer failed to generate a file buffer after filling missing fields.");
+      }
+
+      return {
+        status: "success",
+        message: "File processed successfully with your additional data!",
+        fileData: filledExcelBuffer.toString("base64"),
+        fileName: `filled-${prevState.fileName}`,
+        mimeType: prevState.mimeType,
+        missingFields: undefined,
+        mappedData: undefined,
+        vendorFormBuffer: undefined,
+        extractedFields: undefined,
+      };
+}
+
+export async function processForm(
+  prevState: FormState,
+  formData: FormData
+): Promise<FormState> {
+  try {
+    const isSecondStep = formData.get("is-second-step") === "true";
+    if (isSecondStep) {
+      return await handleSecondaryUpload(prevState, formData);
+    } else {
+      return await handleInitialUpload(prevState, formData);
+    }
   } catch (error) {
     console.error("Error processing form:", error);
     const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
