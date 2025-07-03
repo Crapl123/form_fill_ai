@@ -39,7 +39,7 @@ const prompt = ai.definePrompt({
   {{#each formFields}}- {{{this}}}\n{{/each}}
 
   Google Sheet Data:
-  {{#each sheetData key value}}- Key: {{{key}}}, Value: {{{value}}}\n{{/each}}
+  {{#each sheetData}}- Key: {{{@key}}}, Value: {{{this}}}\n{{/each}}
 
   Return a JSON object where each key is a form field and each value is the corresponding value from the Google Sheet data.  If you cannot find a suitable match in the Google Sheet data, then return an empty string.`,
 });
