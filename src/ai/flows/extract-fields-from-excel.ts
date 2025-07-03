@@ -35,18 +35,25 @@ const prompt = ai.definePrompt({
   name: 'extractFieldsFromExcelPrompt',
   input: {schema: ExtractFieldsFromExcelInputSchema},
   output: {schema: ExtractFieldsFromExcelOutputSchema},
-  prompt: `You are an expert in analyzing Excel forms and extracting field information.
+  prompt: `You are an expert system designed for extracting structured data from Excel forms.
 
-You will be provided with the textual content of an Excel sheet, listing each cell's address and its value.
-Your task is to identify and extract the form field names and their corresponding cell locations where a user would input data.
-A form field is usually a label next to an empty cell. The cellLocation you return should be for the empty cell where data is meant to be entered.
+You will be given the textual content of an Excel sheet, where each line represents a cell with its address (e.g., A1) and its text value.
 
-Analyze the Excel content and return a JSON array where each object contains the fieldName and cellLocation.
+Your task is to identify labels that are next to or above empty cells intended for data entry. These are the form fields.
+- The 'fieldName' should be the text of the label.
+- The 'cellLocation' must be the address of the corresponding empty cell where the data should be entered, NOT the cell of the label itself.
 
-Here's the Excel content:
+Carefully analyze the provided Excel content. Return a JSON array of objects, where each object contains a 'fieldName' and its 'cellLocation'.
+
+IMPORTANT:
+- If you cannot find any form fields, you MUST return an empty array: [].
+- Do not invent fields. Only extract what is clearly a form label next to an input area.
+- The output MUST be a valid JSON array as specified in the output schema.
+
+Here is the Excel content:
 {{{excelContent}}}
 
-Example output:
+Example of a successful output for a simple form:
 [
   {
     "fieldName": "Vendor Name",
@@ -57,8 +64,6 @@ Example output:
     "cellLocation": "D5"
   }
 ]
-
-Ensure the cellLocation accurately reflects the cell or merged cell where the data for the field is expected.
 `,config: {
     safetySettings: [
       {
