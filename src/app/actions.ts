@@ -19,28 +19,24 @@ interface FormState {
   debugInfo?: string;
 }
 
-// Centralized error state creation with safe logging
+// Centralized and robust error state creation with detailed logging
 function createErrorState(message: string, error?: unknown): FormState {
-    console.error("Creating error state:", message, "Raw error:", error);
+    console.error("Error state created. Message:", message, "Raw error object:", error);
     
-    let errorDetails = "An unknown error occurred.";
-
-    if (error) { // Check if error is not null/undefined
-        if (error instanceof Error) {
-            errorDetails = error.message;
-        } else {
-            try {
-                // Safely convert to string, handling potential complex objects or primitives
-                errorDetails = JSON.stringify(error, null, 2);
-            } catch (stringifyError) {
-                // Fallback if JSON.stringify fails (e.g., circular references)
-                errorDetails = "Could not process the full error object.";
-            }
+    let errorDetails: string;
+    
+    if (error instanceof Error) {
+        // Include stack trace for more context in debugging
+        errorDetails = error.stack ? `${error.message}\n\nStack Trace:\n${error.stack}` : error.message;
+    } else if (typeof error === 'string') {
+        errorDetails = error;
+    } else {
+        try {
+            errorDetails = `A non-Error object was thrown: ${JSON.stringify(error, null, 2)}`;
+        } catch (e) {
+            errorDetails = 'A complex, non-serializable error object was thrown. The server logs may have more details.';
         }
     }
-    
-    // Log the full error for debugging, but only return the clean message to the user.
-    console.error(`Error details for debugging: ${message} - Details: ${errorDetails}`);
     
     return {
         status: "error",
@@ -113,31 +109,22 @@ async function handleInitialUpload(prevState: FormState, formData: FormData): Pr
 
         const aiResult = await extractFieldsFromExcel({ excelContent });
         
-        // **CRITICAL VALIDATION** to prevent crash from invalid AI response.
         if (!aiResult || !Array.isArray(aiResult)) {
-            console.error("AI response for field extraction was null or not an array. Response:", aiResult);
-            return {
-                status: "error",
-                message: "The AI could not extract any usable data from your Excel file. Please ensure it is properly formatted and try again.",
-                fileData: null,
-                fileName: "",
-                mimeType: "",
-            };
+            return createErrorState(
+                "The AI could not extract any usable data from your Excel file. Please ensure it is properly formatted and try again.",
+                `AI returned an invalid format. Expected an array, but got: ${JSON.stringify(aiResult, null, 2)}`
+            );
         }
         
         extractedFields = aiResult;
 
         if (extractedFields.length === 0) {
-            return {
-                status: "error",
-                message: "The AI could not detect any fields in the form. Please check the file and ensure it is a proper form.",
-                fileData: null,
-                fileName: "",
-                mimeType: "",
-            };
+            return createErrorState(
+                "The AI could not detect any fields in the form. Please check the file and ensure it is a proper form.",
+                "The AI returned an empty array, indicating no fields were found."
+            );
         }
     } catch (e) {
-        // This will catch any errors thrown during the AI call itself.
         return createErrorState("An error occurred during AI field extraction.", e);
     }
 

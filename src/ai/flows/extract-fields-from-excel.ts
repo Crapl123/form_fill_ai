@@ -98,6 +98,12 @@ const extractFieldsFromExcelFlow = ai.defineFlow(
   async input => {
     // We call the prompt which now returns a raw text response because we removed the output schema from the prompt definition
     const response = await prompt(input);
+    
+    // CRITICAL FIX: The entire response object from the AI could be null if there's a fundamental API error.
+    if (!response || typeof response.text !== 'string') {
+        throw new Error("AI service returned a null or empty response. This could be due to an API error, invalid credentials, or a content safety violation.");
+    }
+
     const rawText = response.text;
 
     if (!rawText || rawText.trim() === '') {
