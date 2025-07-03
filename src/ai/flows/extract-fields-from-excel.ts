@@ -28,34 +28,34 @@ const ExtractFieldsFromExcelOutputSchema = z.array(
 export type ExtractFieldsFromExcelOutput = z.infer<typeof ExtractFieldsFromExcelOutputSchema>;
 
 export async function extractFieldsFromExcel(input: ExtractFieldsFromExcelInput): Promise<ExtractFieldsFromExcelOutput> {
+  // Log the exact input being sent to the AI for debugging.
+  console.log("Sending the following structured content to AI for field extraction:\n---\n", input.excelContent, "\n---");
   return extractFieldsFromExcelFlow(input);
 }
 
+// The prompt now does NOT define an output schema, so we get the raw text back.
 const prompt = ai.definePrompt({
   name: 'extractFieldsFromExcelPrompt',
   input: {schema: ExtractFieldsFromExcelInputSchema},
-  output: {schema: ExtractFieldsFromExcelOutputSchema},
   prompt: `You are an expert at analyzing Excel spreadsheets and extracting form field definitions.
 
 I will give you the structured contents of an Excel sheet.
 
 Your task is to return ONLY a JSON array of objects. Each object must have exactly two keys:
 - "fieldName": the human-readable name or label of a field in the spreadsheet
-- "cellLocation": the Excel cell location (e.g., "B2") where that value is expected to be filled
+- "cellLocation": the Excel cell location (e.g., "B2") where that value is expected or filled
 
 ⚠️ Important:
 - Do NOT include any explanation, preamble, or commentary.
 - Do NOT respond with markdown, quotes, or code blocks.
-- Respond ONLY with a valid JSON array. If no fields are found, return an empty array [].
-
-Here is the structured content:
-{{{excelContent}}}
-
-Example of a valid response:
+- Respond ONLY with a JSON array, exactly like this:
 [
   { "fieldName": "Company Name", "cellLocation": "B2" },
   { "fieldName": "Email", "cellLocation": "B3" }
 ]
+
+Here is the structured content:
+{{{excelContent}}}
 `,
   config: {
     safetySettings: [
@@ -67,19 +67,61 @@ Example of a valid response:
   },
 });
 
+/**
+ * Cleans the raw text response from an AI model to extract a JSON string.
+ * It handles cases where the JSON is wrapped in markdown code blocks.
+ */
+function cleanAndExtractJson(rawText: string): string {
+  // Find the start of the JSON array
+  const jsonStartIndex = rawText.indexOf('[');
+  // Find the end of the JSON array
+  const jsonEndIndex = rawText.lastIndexOf(']');
+
+  if (jsonStartIndex !== -1 && jsonEndIndex !== -1) {
+    // Extract the substring that contains the JSON
+    return rawText.substring(jsonStartIndex, jsonEndIndex + 1);
+  }
+
+  // Return the raw text if no JSON array is found, to let the parser fail informatively
+  return rawText;
+}
+
 const extractFieldsFromExcelFlow = ai.defineFlow(
   {
     name: 'extractFieldsFromExcelFlow',
     inputSchema: ExtractFieldsFromExcelInputSchema,
-    outputSchema: ExtractFieldsFromExcelOutputSchema,
+    outputSchema: ExtractFieldsFromExcelOutputSchema, // We still want the flow to have a typed output
   },
   async input => {
-    const {output} = await prompt(input);
-    // Ensure we always return an array, even if the AI fails to produce output.
-    if (!output || !Array.isArray(output)) {
-      console.warn("AI extraction returned null or invalid format. Defaulting to empty array.");
+    // We call the prompt which now returns a raw text response because we removed the output schema from the prompt definition
+    const response = await prompt(input);
+    const rawText = response.text;
+
+    // Log the raw response as requested for debugging
+    console.log("Raw response from Gemini for field extraction:", rawText);
+
+    if (!rawText || rawText.trim() === '') {
+      console.error("AI returned an empty or whitespace response.");
+      return []; // Return empty array on empty response
+    }
+
+    const cleanedJsonString = cleanAndExtractJson(rawText);
+    
+    try {
+      // Attempt to parse the cleaned JSON string
+      const parsedJson = JSON.parse(cleanedJsonString);
+      // Further validation to ensure it's an array
+      if (Array.isArray(parsedJson)) {
+        return parsedJson;
+      } else {
+        console.error("Parsed JSON is not an array:", parsedJson);
+        return [];
+      }
+    } catch (e) {
+      console.error("Failed to parse JSON from AI response:", e, "Cleaned response was:", cleanedJsonString);
+      // On parsing failure, return an empty array so the app doesn't crash.
+      // The error will be handled upstream in `actions.ts`.
       return [];
     }
-    return output;
   }
 );
