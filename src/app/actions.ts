@@ -68,14 +68,14 @@ export async function processForm(
       return { ...prevState, status: "error", message: "Please upload a valid vendor form." };
     }
     
-    if (!masterDataJSON) {
-      return { ...prevState, status: "error", message: "Master data is missing. Please go back to Step 1." };
-    }
-
     if (file.type !== "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet") {
        return { ...prevState, status: "error", message: "Invalid file type. Please upload an .xlsx file." };
     }
     
+    if (!masterDataJSON) {
+      return { ...prevState, status: "error", message: "Master data is missing. Please go back to Step 1." };
+    }
+
     const masterData = JSON.parse(masterDataJSON);
     if (typeof masterData !== 'object' || masterData === null || Object.keys(masterData).length === 0) {
         return { ...prevState, status: "error", message: "Master data is invalid or empty. Please re-upload and parse it." };
@@ -93,7 +93,7 @@ export async function processForm(
     let excelContent = "";
     worksheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
       row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
-        excelContent += `Cell: ${cell.address}, Value: '${cell.text}'\n`;
+        excelContent += `Cell: ${cell.address}, Value: '${cell.text ?? ''}'\n`;
       });
     });
 
