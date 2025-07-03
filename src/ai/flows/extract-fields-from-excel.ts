@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview AI-powered Excel field extraction flow.
@@ -28,8 +29,10 @@ const ExtractFieldsFromExcelOutputSchema = z.array(
 export type ExtractFieldsFromExcelOutput = z.infer<typeof ExtractFieldsFromExcelOutputSchema>;
 
 export async function extractFieldsFromExcel(input: ExtractFieldsFromExcelInput): Promise<ExtractFieldsFromExcelOutput> {
-  // Log the exact input being sent to the AI for debugging.
-  console.log("Sending the following structured content to AI for field extraction:\n---\n", input.excelContent, "\n---");
+  console.log("\n\n--- AI DEBUG START ---");
+  console.log(">>> [INPUT TO GEMINI] Sending the following structured content for field extraction:");
+  console.log(input.excelContent);
+  console.log("---");
   return extractFieldsFromExcelFlow(input);
 }
 
@@ -75,7 +78,7 @@ function cleanAndExtractJson(rawText: string): string {
   // Try to find a JSON block wrapped in markdown
   const markdownMatch = rawText.match(/```(json)?\s*([\s\S]*?)\s*```/);
   if (markdownMatch && markdownMatch[2]) {
-    console.log("Found and extracted JSON from markdown block.");
+    console.log(">>> [CLEANING] Found and extracted JSON from markdown block.");
     return markdownMatch[2].trim();
   }
 
@@ -84,12 +87,11 @@ function cleanAndExtractJson(rawText: string): string {
   const jsonEndIndex = rawText.lastIndexOf(']');
 
   if (jsonStartIndex !== -1 && jsonEndIndex !== -1) {
-    console.log("Found JSON by slicing from first '[' to last ']'.");
+    console.log(">>> [CLEANING] Found JSON by slicing from first '[' to last ']'.");
     return rawText.substring(jsonStartIndex, jsonEndIndex + 1);
   }
 
-  // Return the raw text if no JSON array is found, to let the parser fail informatively
-  console.log("No JSON structure found, returning raw text for parsing attempt.");
+  console.log(">>> [CLEANING] No JSON structure found, returning raw text for parsing attempt.");
   return rawText;
 }
 
@@ -105,11 +107,12 @@ const extractFieldsFromExcelFlow = ai.defineFlow(
     const response = await prompt(input);
     const rawText = response.text;
 
-    // Log the raw response as requested for debugging
-    console.log("Raw response from Gemini for field extraction:", rawText);
+    console.log("<<< [RAW RESPONSE FROM GEMINI]:");
+    console.log(rawText);
 
     if (!rawText || rawText.trim() === '') {
-      console.error("AI returned an empty or whitespace response.");
+      console.error("<<< [ERROR] AI returned an empty or whitespace response.");
+      console.log("--- AI DEBUG END ---\n\n");
       return []; // Return empty array on empty response
     }
 
@@ -120,15 +123,19 @@ const extractFieldsFromExcelFlow = ai.defineFlow(
       const parsedJson = JSON.parse(cleanedJsonString);
       // Further validation to ensure it's an array
       if (Array.isArray(parsedJson)) {
+        console.log(">>> [SUCCESS] Successfully parsed JSON.");
+        console.log("--- AI DEBUG END ---\n\n");
         return parsedJson;
       } else {
-        console.error("Parsed JSON is not an array:", parsedJson);
+        console.error("<<< [ERROR] Parsed JSON is not an array:", parsedJson);
+        console.log("--- AI DEBUG END ---\n\n");
         return [];
       }
     } catch (e) {
-      console.error("Failed to parse JSON from AI response:", e, "Cleaned response was:", cleanedJsonString);
+      console.error("<<< [ERROR] Failed to parse JSON from AI response:", e);
+      console.error("<<< Cleaned response was:", cleanedJsonString);
+      console.log("--- AI DEBUG END ---\n\n");
       // On parsing failure, return an empty array so the app doesn't crash.
-      // The error will be handled upstream in `actions.ts`.
       return [];
     }
   }
