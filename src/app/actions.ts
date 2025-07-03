@@ -3,6 +3,7 @@
 import { extractFieldsFromExcel } from "@/ai/flows/extract-fields-from-excel";
 import { matchFieldsWithSheetData } from "@/ai/flows/match-fields-with-google-sheet-data";
 import { fillExcelData } from "@/lib/excel-writer";
+import ExcelJS from "exceljs";
 
 interface FormState {
   status: "idle" | "success" | "error" | "processing";
@@ -39,11 +40,25 @@ export async function processForm(
     }
 
     const fileBuffer = Buffer.from(await file.arrayBuffer());
-    const dataUri = `data:${file.type};base64,${fileBuffer.toString("base64")}`;
+    
+    // Parse Excel and convert to text for the AI
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(fileBuffer);
+    const worksheet = workbook.worksheets[0];
+    if (!worksheet) {
+      throw new Error("No worksheet found in the file.");
+    }
+    
+    let excelContent = "";
+    worksheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
+      row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+        excelContent += `Cell: ${cell.address}, Value: '${cell.text}'\n`;
+      });
+    });
 
     // Step 1: Extract fields from Excel using AI
     const extractedFields = await extractFieldsFromExcel({
-      excelDataUri: dataUri,
+      excelContent: excelContent,
     });
 
     if (!extractedFields || extractedFields.length === 0) {

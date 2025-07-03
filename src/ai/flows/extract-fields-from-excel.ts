@@ -2,7 +2,7 @@
 /**
  * @fileOverview AI-powered Excel field extraction flow.
  *
- * - extractFieldsFromExcel - Extracts form field names and their cell locations from an Excel file.
+ * - extractFieldsFromExcel - Extracts form field names and their cell locations from an Excel file's text content.
  * - ExtractFieldsFromExcelInput - The input type for the extractFieldsFromExcel function.
  * - ExtractFieldsFromExcelOutput - The return type for the extractFieldsFromExcel function.
  */
@@ -11,10 +11,10 @@ import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
 const ExtractFieldsFromExcelInputSchema = z.object({
-  excelDataUri: z
+  excelContent: z
     .string()
     .describe(
-      "The Excel file data, as a data URI that must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'."
+      "The textual content of an Excel sheet, with each cell's value and address."
     ),
 });
 export type ExtractFieldsFromExcelInput = z.infer<typeof ExtractFieldsFromExcelInputSchema>;
@@ -37,12 +37,14 @@ const prompt = ai.definePrompt({
   output: {schema: ExtractFieldsFromExcelOutputSchema},
   prompt: `You are an expert in analyzing Excel forms and extracting field information.
 
-You will be provided with the content of an Excel file as a data URI.
-Your task is to identify and extract the form field names and their corresponding cell locations.
+You will be provided with the textual content of an Excel sheet, listing each cell's address and its value.
+Your task is to identify and extract the form field names and their corresponding cell locations where a user would input data.
+A form field is usually a label next to an empty cell. The cellLocation you return should be for the empty cell where data is meant to be entered.
 
-Analyze the Excel data and return a JSON array where each object contains the fieldName and cellLocation.
+Analyze the Excel content and return a JSON array where each object contains the fieldName and cellLocation.
 
-Here's the Excel data: {{media url=excelDataUri}}
+Here's the Excel content:
+{{{excelContent}}}
 
 Example output:
 [
