@@ -1,1 +1,5 @@
-// Flows will be imported for their side effects in this file.
+import { config } from 'dotenv';
+config();
+
+import '@/ai/flows/extract-fields-from-excel.ts';
+import '@/ai/flows/match-fields-with-google-sheet-data.ts';
