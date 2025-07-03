@@ -21,33 +21,35 @@ interface FormState {
 // Centralized error state creation with safe logging
 function createErrorState(message: string, error?: unknown): FormState {
     console.error("Creating error state:", message, "Raw error:", error);
-    let errorMessage = "An unknown error occurred.";
-    if (error) {
-        try {
-            if (error instanceof Error) {
-                errorMessage = error.message;
-            } else {
-                // Safely convert to string, handling potential complex objects
-                errorMessage = JSON.stringify(error);
+    
+    let errorDetails = "An unknown error occurred.";
+
+    if (error) { // Check if error is not null/undefined
+        if (error instanceof Error) {
+            errorDetails = error.message;
+        } else {
+            try {
+                // Safely convert to string, handling potential complex objects or primitives
+                errorDetails = JSON.stringify(error, null, 2);
+            } catch (stringifyError) {
+                // Fallback if JSON.stringify fails (e.g., circular references)
+                errorDetails = "Could not process the full error object.";
             }
-        } catch (stringifyError) {
-            // Fallback if JSON.stringify fails (e.g., circular references)
-            errorMessage = "Could not process the error object.";
         }
     }
     
-    // Return a more detailed message for debugging purposes
-    const finalMessage = `${message} - Details: ${errorMessage}`;
-    console.error("Underlying error message:", finalMessage);
+    // Log the full error for debugging, but only return the clean message to the user.
+    console.error(`Error details for debugging: ${message} - Details: ${errorDetails}`);
     
     return {
         status: "error",
-        message: finalMessage,
+        message: message, 
         fileData: null,
         fileName: "",
         mimeType: "",
     };
 }
+
 
 // Main logic for the initial form submission (Step 3)
 async function handleInitialUpload(prevState: FormState, formData: FormData): Promise<FormState> {
@@ -110,21 +112,36 @@ async function handleInitialUpload(prevState: FormState, formData: FormData): Pr
         }
 
         console.log("Sending Excel text content to AI for field extraction...");
-        extractedFields = await extractFieldsFromExcel({ excelContent });
+        const aiResult = await extractFieldsFromExcel({ excelContent });
         
-        // Strict validation after the AI call, as requested.
-        if (!extractedFields || !Array.isArray(extractedFields)) {
-            console.error("AI response for field extraction was null or not an array. Response:", extractedFields);
-            return createErrorState("AI could not extract fields from the Excel. The AI returned a null or invalid format. Please check the file and try again.");
+        // **CRITICAL VALIDATION** to prevent crash from invalid AI response.
+        if (!aiResult || !Array.isArray(aiResult)) {
+            console.error("AI response for field extraction was null or not an array. Response:", aiResult);
+            return {
+                status: "error",
+                message: "The AI could not extract any usable data from your Excel file. Please ensure it is properly formatted and try again.",
+                fileData: null,
+                fileName: "",
+                mimeType: "",
+            };
         }
+        
+        extractedFields = aiResult;
 
         if (extractedFields.length === 0) {
-            return createErrorState("AI could not detect any fields in the form. Please check the file and ensure it is a proper form.");
+            return {
+                status: "error",
+                message: "The AI could not detect any fields in the form. Please check the file and ensure it is a proper form.",
+                fileData: null,
+                fileName: "",
+                mimeType: "",
+            };
         }
 
         console.log(`AI successfully extracted ${extractedFields.length} fields.`);
     } catch (e) {
-        return createErrorState("Failed to extract fields from Excel using AI.", e);
+        // This will catch any errors thrown during the AI call itself.
+        return createErrorState("An error occurred during AI field extraction.", e);
     }
 
     // --- 4. AI Data Matching ---
@@ -136,7 +153,6 @@ async function handleInitialUpload(prevState: FormState, formData: FormData): Pr
           sheetData: masterData,
         });
         if (!mappedData) {
-            // This case should be rare now, but it's a good safeguard.
             return createErrorState("AI failed to map fields. The mapping service returned an empty response.");
         }
         console.log(`AI successfully mapped ${Object.keys(mappedData).length} fields.`);
@@ -169,7 +185,6 @@ async function handleInitialUpload(prevState: FormState, formData: FormData): Pr
     try {
         console.log("All fields mapped. Writing data to new Excel file...");
         filledExcelBuffer = await fillExcelData(fileBuffer, extractedFields, mappedData);
-        // CRITICAL CHECK: Ensure the buffer is valid before proceeding.
         if (!filledExcelBuffer || !(filledExcelBuffer instanceof Buffer) || filledExcelBuffer.length === 0) {
             return createErrorState("The Excel writer failed to generate a valid file. The output was empty or invalid.");
         }
@@ -183,15 +198,12 @@ async function handleInitialUpload(prevState: FormState, formData: FormData): Pr
     return {
       status: "success",
       message: "File processed successfully!",
-      fileData: filledExcelBuffer.toString("base64"), // This is now safe to call.
+      fileData: filledExcelBuffer.toString("base64"),
       fileName: `filled-${file.name}`,
       mimeType: file.type,
-      missingFields: undefined,
-      mappedData: undefined,
-      vendorFormBuffer: undefined,
-      extractedFields: undefined,
     };
 }
+
 
 // Logic for handling the submission of manually-entered missing data
 async function handleSecondaryUpload(prevState: FormState, formData: FormData): Promise<FormState> {
@@ -245,13 +257,9 @@ async function handleSecondaryUpload(prevState: FormState, formData: FormData): 
       return {
         status: "success",
         message: "File processed successfully with your additional data!",
-        fileData: filledExcelBuffer.toString("base64"), // Safe to call.
+        fileData: filledExcelBuffer.toString("base64"),
         fileName: `filled-${prevState.fileName}`,
         mimeType: prevState.mimeType,
-        missingFields: undefined,
-        mappedData: undefined,
-        vendorFormBuffer: undefined,
-        extractedFields: undefined,
       };
 }
 
