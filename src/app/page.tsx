@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { useFormState, useFormStatus } from "react-dom";
+import React, { useEffect, useState, useActionState } from "react";
+import { useFormStatus } from "react-dom";
 import ExcelJS from "exceljs";
 import {
   Card,
@@ -98,7 +98,7 @@ const FileUploadDropzone = ({ file, onFileChange, icon, title, description, inpu
 
 export default function Home() {
   const { toast } = useToast();
-  const [state, formAction] = useFormState(processForm, initialState);
+  const [state, formAction] = useActionState(processForm, initialState);
   const { pending } = useFormStatus();
 
   const [currentTab, setCurrentTab] = useState("master-data");
