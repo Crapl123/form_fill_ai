@@ -14,7 +14,6 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Table,
@@ -41,7 +40,6 @@ import {
   Zap,
   CheckCircle2,
   Database,
-  HelpCircle,
   ListChecks,
   ArrowRight,
   Terminal,
@@ -49,13 +47,13 @@ import {
 import { processForm } from "./actions";
 import { useToast } from "@/hooks/use-toast";
 
+// Simplified initial state
 const initialState = {
-  status: "idle" as "idle" | "success" | "error" | "processing" | "awaiting-input",
+  status: "idle" as "idle" | "success" | "error" | "processing",
   message: "",
   fileData: null,
   fileName: "",
   mimeType: "",
-  missingFields: undefined,
   debugInfo: undefined,
 };
 
@@ -308,44 +306,23 @@ export default function Home() {
           <TabsContent value="fill-form">
             <form action={formAction}>
               <CardContent className="space-y-6 pt-6">
-                 {state.status === 'awaiting-input' ? (
-                   <div className="space-y-4">
-                    <Alert>
-                      <HelpCircle className="h-4 w-4" />
-                      <AlertTitle>Missing Information</AlertTitle>
-                      <AlertDescription>{state.message}</AlertDescription>
-                    </Alert>
-                    <input type="hidden" name="is-second-step" value="true" />
-                     <div className="space-y-4 rounded-md border p-4">
-                       {state.missingFields?.map((field) => (
-                         <div key={field} className="grid grid-cols-3 items-center gap-4">
-                            <Label htmlFor={field} className="text-right">{field}</Label>
-                            <Input id={field} name={field} className="col-span-2" required />
-                         </div>
-                       ))}
-                     </div>
-                   </div>
-                 ) : (
-                  <>
-                    <input type="hidden" name="masterData" value={JSON.stringify(masterData ?? {})} />
-                    <FileUploadDropzone
-                        file={vendorFormFile}
-                        onFileChange={handleVendorFormFileChange}
-                        icon={<CloudUpload className="h-10 w-10 text-muted-foreground" />}
-                        title="Upload Vendor Form"
-                        description="Excel files only (.xlsx)"
-                        inputId="file"
-                        name="file"
-                        required
-                    />
-                  </>
-                 )}
+                <input type="hidden" name="masterData" value={JSON.stringify(masterData ?? {})} />
+                <FileUploadDropzone
+                    file={vendorFormFile}
+                    onFileChange={handleVendorFormFileChange}
+                    icon={<CloudUpload className="h-10 w-10 text-muted-foreground" />}
+                    title="Upload Supplier Form To Fill"
+                    description="Excel files only (.xlsx)"
+                    inputId="file"
+                    name="file"
+                    required
+                />
                 
                 {pending && (
                   <div className="space-y-4 rounded-md border p-4">
                      <div className="flex items-center gap-3 text-primary">
                         <Loader className="h-5 w-5 animate-spin text-accent" />
-                        <span className="font-medium">Processing your form with AI...</span>
+                        <span className="font-medium">AI is analyzing and filling your form...</span>
                      </div>
                   </div>
                 )}
@@ -388,11 +365,6 @@ export default function Home() {
                       <>
                         <Loader className="mr-2 h-4 w-4 animate-spin" />
                         Processing...
-                      </>
-                    ) : state.status === 'awaiting-input' ? (
-                       <>
-                        <CheckCircle2 className="mr-2 h-4 w-4" />
-                        Submit & Complete
                       </>
                     ) : (
                       <>
