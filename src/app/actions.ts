@@ -44,34 +44,52 @@ async function handleInitialUpload(prevState: FormState, formData: FormData): Pr
         return { ...prevState, status: "error", message: "Failed to parse master data. Please check it in Step 1." };
     }
 
-    const fileBuffer = Buffer.from(await file.arrayBuffer());
-    
-    const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(fileBuffer);
-    const worksheet = workbook.worksheets[0];
-    if (!worksheet) {
-      throw new Error("No worksheet found in the file.");
+    let fileBuffer;
+    try {
+        fileBuffer = Buffer.from(await file.arrayBuffer());
+    } catch(e) {
+        return { ...prevState, status: "error", message: "Could not read the uploaded form file." };
     }
-    
-    let excelContent = "";
-    worksheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
-      row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
-        excelContent += `Cell: ${cell.address}, Value: '${cell.text ?? ''}'\n`;
-      });
-    });
 
-    const extractedFields = await extractFieldsFromExcel({
-      excelContent: excelContent,
-    });
+    let extractedFields;
+    try {
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.load(fileBuffer);
+        const worksheet = workbook.worksheets[0];
+        if (!worksheet) {
+          throw new Error("No worksheet found in the file.");
+        }
+        
+        let excelContent = "";
+        worksheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
+          row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+            excelContent += `Cell: ${cell.address}, Value: '${cell.text ?? ''}'\n`;
+          });
+        });
 
-    if (!extractedFields || extractedFields.length === 0) {
+        extractedFields = await extractFieldsFromExcel({
+          excelContent: excelContent,
+        });
+    } catch (e) {
+        const message = e instanceof Error ? e.message : "An unknown error occurred.";
+        return { ...prevState, status: "error", message: `Failed to extract fields from Excel: ${message}` };
+    }
+
+
+    if (!extractedFields || !Array.isArray(extractedFields) || extractedFields.length === 0) {
       return { ...prevState, status: "error", message: "AI could not detect any fields in the form. Please check the file." };
     }
 
-    const mappedData = await matchFieldsWithSheetData({
-      formFields: extractedFields.map((f) => f.fieldName),
-      sheetData: masterData,
-    });
+    let mappedData;
+    try {
+        mappedData = await matchFieldsWithSheetData({
+          formFields: extractedFields.map((f) => f.fieldName),
+          sheetData: masterData,
+        });
+    } catch(e) {
+        const message = e instanceof Error ? e.message : "An unknown error occurred.";
+        return { ...prevState, status: "error", message: `Failed to map fields with AI: ${message}` };
+    }
     
     if (!mappedData) {
       return { ...prevState, status: "error", message: "AI failed to map fields from your master data. Please check the files." };
@@ -95,10 +113,16 @@ async function handleInitialUpload(prevState: FormState, formData: FormData): Pr
       };
     }
     
-    const filledExcelBuffer = await fillExcelData(fileBuffer, extractedFields, mappedData);
+    let filledExcelBuffer;
+    try {
+        filledExcelBuffer = await fillExcelData(fileBuffer, extractedFields, mappedData);
+    } catch (e) {
+        const message = e instanceof Error ? e.message : "An unknown error occurred.";
+        return { ...prevState, status: "error", message: `Failed to write data to Excel file: ${message}` };
+    }
 
-    if (!filledExcelBuffer) {
-        throw new Error("The Excel writer failed to generate a file buffer.");
+    if (!filledExcelBuffer || !(filledExcelBuffer instanceof Buffer)) {
+        return { ...prevState, status: "error", message: "The Excel writer failed to generate a valid file buffer." };
     }
 
     const filledFileName = `filled-${file.name}`;
@@ -116,6 +140,7 @@ async function handleSecondaryUpload(prevState: FormState, formData: FormData): 
      if (!prevState.vendorFormBuffer || !prevState.extractedFields || !prevState.mappedData || !prevState.missingFields) {
         return { ...prevState, status: 'error', message: 'Session state lost. Please start over.' };
       }
+      
       const vendorFormBuffer = Buffer.from(prevState.vendorFormBuffer, 'base64');
       const extractedFields = prevState.extractedFields;
       let updatedMappedData = { ...prevState.mappedData };
@@ -131,15 +156,19 @@ async function handleSecondaryUpload(prevState: FormState, formData: FormData): 
       });
       
       if(!allFieldsFilled) {
-          // Re-render the form with a message to fill all fields.
-          // The missingFields are the same, so we can reuse them from prevState.
           return { ...prevState, status: 'awaiting-input', message: 'Please fill all the missing fields before submitting.' };
       }
 
-      const filledExcelBuffer = await fillExcelData(vendorFormBuffer, extractedFields, updatedMappedData);
+      let filledExcelBuffer;
+      try {
+        filledExcelBuffer = await fillExcelData(vendorFormBuffer, extractedFields, updatedMappedData);
+      } catch (e) {
+        const message = e instanceof Error ? e.message : "An unknown error occurred.";
+        return { ...prevState, status: "error", message: `Failed to write additional data to Excel file: ${message}` };
+      }
       
-      if (!filledExcelBuffer) {
-        throw new Error("The Excel writer failed to generate a file buffer after filling missing fields.");
+      if (!filledExcelBuffer || !(filledExcelBuffer instanceof Buffer)) {
+        return { ...prevState, status: "error", message: "The Excel writer failed to generate a valid file buffer after filling missing data." };
       }
 
       return {
@@ -167,8 +196,14 @@ export async function processForm(
       return await handleInitialUpload(prevState, formData);
     }
   } catch (error) {
-    console.error("Error processing form:", error);
-    const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
-    return { ...prevState, status: "error", message: `Failed to process form. ${errorMessage}` };
+    console.error("Critical error in processForm:", error);
+    const errorMessage = error instanceof Error ? error.message : "A critical unknown error occurred.";
+    return {
+        status: "error",
+        message: `A critical error occurred: ${errorMessage}. Please try again from the beginning.`,
+        fileData: null,
+        fileName: "",
+        mimeType: "",
+    };
   }
 }

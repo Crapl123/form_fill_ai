@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview AI-powered Excel field extraction flow.
@@ -77,6 +78,6 @@ const extractFieldsFromExcelFlow = ai.defineFlow(
   },
   async input => {
     const {output} = await prompt(input);
-    return output!;
+    return output || [];
   }
 );
