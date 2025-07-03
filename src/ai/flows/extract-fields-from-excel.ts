@@ -35,36 +35,29 @@ const prompt = ai.definePrompt({
   name: 'extractFieldsFromExcelPrompt',
   input: {schema: ExtractFieldsFromExcelInputSchema},
   output: {schema: ExtractFieldsFromExcelOutputSchema},
-  prompt: `You are an expert system designed for extracting structured data from Excel forms.
+  prompt: `You are an expert at analyzing Excel spreadsheets and extracting form field definitions.
 
-You will be given the textual content of an Excel sheet, where each line represents a cell with its address (e.g., A1) and its text value.
+I will give you the structured contents of an Excel sheet.
 
-Your task is to identify labels that are next to or above empty cells intended for data entry. These are the form fields.
-- The 'fieldName' should be the text of the label.
-- The 'cellLocation' must be the address of the corresponding empty cell where the data should be entered, NOT the cell of the label itself.
+Your task is to return ONLY a JSON array of objects. Each object must have exactly two keys:
+- "fieldName": the human-readable name or label of a field in the spreadsheet
+- "cellLocation": the Excel cell location (e.g., "B2") where that value is expected to be filled
 
-Carefully analyze the provided Excel content. Return a JSON array of objects, where each object contains a 'fieldName' and its 'cellLocation'.
+⚠️ Important:
+- Do NOT include any explanation, preamble, or commentary.
+- Do NOT respond with markdown, quotes, or code blocks.
+- Respond ONLY with a valid JSON array. If no fields are found, return an empty array [].
 
-IMPORTANT:
-- If you cannot find any form fields, you MUST return an empty array: [].
-- Do not invent fields. Only extract what is clearly a form label next to an input area.
-- The output MUST be a valid JSON array as specified in the output schema.
-
-Here is the Excel content:
+Here is the structured content:
 {{{excelContent}}}
 
-Example of a successful output for a simple form:
+Example of a valid response:
 [
-  {
-    "fieldName": "Vendor Name",
-    "cellLocation": "B2"
-  },
-  {
-    "fieldName": "GST Number",
-    "cellLocation": "D5"
-  }
+  { "fieldName": "Company Name", "cellLocation": "B2" },
+  { "fieldName": "Email", "cellLocation": "B3" }
 ]
-`,config: {
+`,
+  config: {
     safetySettings: [
       {
         category: 'HARM_CATEGORY_DANGEROUS_CONTENT',
