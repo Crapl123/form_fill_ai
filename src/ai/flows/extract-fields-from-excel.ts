@@ -72,19 +72,27 @@ Here is the structured content:
  * It handles cases where the JSON is wrapped in markdown code blocks.
  */
 function cleanAndExtractJson(rawText: string): string {
-  // Find the start of the JSON array
+  // Try to find a JSON block wrapped in markdown
+  const markdownMatch = rawText.match(/```(json)?\s*([\s\S]*?)\s*```/);
+  if (markdownMatch && markdownMatch[2]) {
+    console.log("Found and extracted JSON from markdown block.");
+    return markdownMatch[2].trim();
+  }
+
+  // Fallback to finding the first '[' and last ']'
   const jsonStartIndex = rawText.indexOf('[');
-  // Find the end of the JSON array
   const jsonEndIndex = rawText.lastIndexOf(']');
 
   if (jsonStartIndex !== -1 && jsonEndIndex !== -1) {
-    // Extract the substring that contains the JSON
+    console.log("Found JSON by slicing from first '[' to last ']'.");
     return rawText.substring(jsonStartIndex, jsonEndIndex + 1);
   }
 
   // Return the raw text if no JSON array is found, to let the parser fail informatively
+  console.log("No JSON structure found, returning raw text for parsing attempt.");
   return rawText;
 }
+
 
 const extractFieldsFromExcelFlow = ai.defineFlow(
   {
