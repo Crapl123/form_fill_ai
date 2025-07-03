@@ -2,7 +2,6 @@
 
 import { extractFieldsFromExcel } from "@/ai/flows/extract-fields-from-excel";
 import { matchFieldsWithSheetData } from "@/ai/flows/match-fields-with-google-sheet-data";
-import { vendorMasterData } from "@/lib/data";
 import { fillExcelData } from "@/lib/excel-writer";
 
 interface FormState {
@@ -18,9 +17,14 @@ export async function processForm(
   formData: FormData
 ): Promise<FormState> {
   const file = formData.get("file") as File;
+  const masterDataJSON = formData.get("masterData") as string | null;
 
   if (!file || file.size === 0) {
-    return { ...prevState, status: "error", message: "Please upload a valid file." };
+    return { ...prevState, status: "error", message: "Please upload a valid vendor form." };
+  }
+  
+  if (!masterDataJSON) {
+    return { ...prevState, status: "error", message: "Master data is missing. Please go back to Step 1." };
   }
 
   // Validate file type
@@ -29,6 +33,11 @@ export async function processForm(
   }
 
   try {
+    const masterData = JSON.parse(masterDataJSON);
+    if (typeof masterData !== 'object' || masterData === null || Object.keys(masterData).length === 0) {
+        return { ...prevState, status: "error", message: "Master data is invalid or empty. Please re-upload and parse it." };
+    }
+
     const fileBuffer = Buffer.from(await file.arrayBuffer());
     const dataUri = `data:${file.type};base64,${fileBuffer.toString("base64")}`;
 
@@ -41,10 +50,10 @@ export async function processForm(
       return { ...prevState, status: "error", message: "AI could not detect any fields in the form. Please check the file." };
     }
 
-    // Step 2: Match fields with Google Sheet data using AI
+    // Step 2: Match fields with master data using AI
     const mappedData = await matchFieldsWithSheetData({
       formFields: extractedFields.map((f) => f.fieldName),
-      sheetData: vendorMasterData,
+      sheetData: masterData,
     });
     
     // Step 3: Write the mapped data back to the Excel file
