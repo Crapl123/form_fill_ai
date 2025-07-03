@@ -32,7 +32,8 @@ function createErrorState(message: string, error?: unknown): FormState {
         errorDetails = error;
     } else {
         try {
-            errorDetails = `A non-Error object was thrown: ${JSON.stringify(error, null, 2)}`;
+            // Use JSON.stringify with a replacer to handle complex objects without crashing
+            errorDetails = `A non-Error object was thrown: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
         } catch (e) {
             errorDetails = 'A complex, non-serializable error object was thrown. The server logs may have more details.';
         }
@@ -99,6 +100,8 @@ async function handleInitialUpload(prevState: FormState, formData: FormData): Pr
         let excelContent = "";
         worksheet.eachRow({ includeEmpty: true }, (row) => {
           row.eachCell({ includeEmpty: true }, (cell) => {
+            // CRITICAL FIX: Use nullish coalescing operator (??) to prevent crash on merged cells.
+            // Merged cells can have a null `text` property, which causes `toString()` to be called on null.
             excelContent += `Cell: ${cell.address}, Value: '${cell.text ?? ''}'\n`;
           });
         });
