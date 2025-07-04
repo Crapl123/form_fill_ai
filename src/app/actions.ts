@@ -7,7 +7,6 @@ import { reconstructPdfWithData } from "@/ai/flows/reconstruct-pdf-with-data";
 import { fillExcelData } from "@/lib/excel-writer";
 import ExcelJS from "exceljs";
 import { PDFDocument, StandardFonts } from "pdf-lib";
-import pdf from "pdf-parse";
 
 interface FormState {
   status: "idle" | "success" | "error" | "processing";
@@ -123,43 +122,12 @@ async function handlePdfProcessing(fileBuffer: Buffer, masterData: Record<string
         const pdfBytes = await pdfDoc.save();
         return Buffer.from(pdfBytes);
     } 
-    // ---- NEW FALLBACK LOGIC for FLAT (non-fillable) PDFs ----
+    // ---- For FLAT (non-fillable) PDFs, we now show an error ----
     else {
-        // 1. Extract text using pdf-parse
-        const data = await pdf(fileBuffer);
-        const pdfTextContent = data.text;
-
-        if (!pdfTextContent || pdfTextContent.trim().length < 10) {
-             throw new Error("The uploaded PDF appears to be a scanned image or has no text content. It cannot be processed automatically.");
-        }
-
-        // 2. Call the new AI flow to reconstruct the text
-        const reconstructedText = await reconstructPdfWithData({
-            masterData: masterData,
-            pdfTextContent: pdfTextContent,
-        });
-
-        if (!reconstructedText || reconstructedText.trim() === '') {
-            throw new Error("The AI failed to generate the filled document text.");
-        }
-
-        // 3. Create a new PDF from the AI's text response
-        const newPdfDoc = await PDFDocument.create();
-        const page = newPdfDoc.addPage();
-        const { width, height } = page.getSize();
-        const font = await newPdfDoc.embedFont(StandardFonts.Helvetica);
-        
-        page.drawText(reconstructedText, {
-            x: 50,
-            y: height - 50,
-            size: 11,
-            font: font,
-            lineHeight: 14,
-            maxWidth: width - 100,
-        });
-
-        const pdfBytes = await newPdfDoc.save();
-        return Buffer.from(pdfBytes);
+      // The 'pdf-parse' library causes a server crash, so this feature is disabled.
+      throw new Error(
+        "The uploaded PDF is not a standard fillable form. Processing for flat (non-fillable) PDFs is not currently supported due to a library incompatibility. Please use a fillable PDF."
+      );
     }
 }
 
