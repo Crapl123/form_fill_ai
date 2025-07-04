@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useEffect, useState, useActionState } from "react";
+import React, { useEffect, useState, useActionState, useMemo } from "react";
 import ExcelJS from "exceljs";
 import {
   Card,
@@ -99,6 +99,16 @@ function CorrectionForm({ processState }) {
   const [correctionState, correctionAction, isSubmittingCorrections] = useActionState(applyCorrections, initialProcessState);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
 
+  const uniqueMissingFields = useMemo(() => {
+    if (!processState.missingFields) return [];
+    const seen = new Set();
+    return processState.missingFields.filter(item => {
+      const duplicate = seen.has(item.targetCell);
+      seen.add(item.targetCell);
+      return !duplicate;
+    });
+  }, [processState.missingFields]);
+
   useEffect(() => {
     if (correctionState.status === "error") {
       toast({
@@ -132,7 +142,7 @@ function CorrectionForm({ processState }) {
       <input type="hidden" name="fileName" value={processState.fileName ?? ""} />
       <input type="hidden" name="mimeType" value={processState.mimeType ?? ""} />
       
-      {processState.missingFields && processState.missingFields.length > 0 && (
+      {uniqueMissingFields && uniqueMissingFields.length > 0 && (
           <div className="space-y-4 rounded-lg border border-yellow-500/50 bg-yellow-500/10 p-4">
               <div className="flex items-center gap-2">
                  <HelpCircle className="h-5 w-5 text-yellow-600" />
@@ -140,7 +150,7 @@ function CorrectionForm({ processState }) {
               </div>
               <p className="text-sm text-muted-foreground">The AI identified these fields in the form but couldn't find matching data in your master sheet. Please provide the values below.</p>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {processState.missingFields.map(item => (
+                {uniqueMissingFields.map(item => (
                     <div className="space-y-2" key={item.targetCell}>
                         <Label htmlFor={`missing_${item.targetCell}`}>{item.labelGuessed}</Label>
                         <Input 
@@ -506,3 +516,5 @@ export default function Home() {
     </main>
   );
 }
+
+    
