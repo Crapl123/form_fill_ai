@@ -1,20 +1,27 @@
 
 "use server";
 
+import { correctFilledForm } from "@/ai/flows/correct-filled-form";
 import { fillSupplierForm } from "@/ai/flows/fill-supplier-form";
 import { mapDataToPdfFields } from "@/ai/flows/map-data-to-pdf-fields";
 import { reconstructPdfWithData } from "@/ai/flows/reconstruct-pdf-with-data";
 import { fillExcelData } from "@/lib/excel-writer";
 import ExcelJS from "exceljs";
-import { PDFDocument, StandardFonts } from "pdf-lib";
+import { PDFDocument } from "pdf-lib";
 
-interface FormState {
-  status: "idle" | "success" | "error" | "processing";
+interface PreviewData {
+  cell: string;
+  value: string;
+}
+
+export interface FormState {
+  status: "idle" | "success" | "error" | "processing" | "preview";
   message: string;
   fileData: string | null;
   fileName: string;
   mimeType: string;
   debugInfo?: string;
+  previewData?: PreviewData[];
 }
 
 function createErrorState(message: string, error?: unknown): FormState {
@@ -44,7 +51,7 @@ function createErrorState(message: string, error?: unknown): FormState {
     };
 }
 
-async function handleExcelProcessing(fileBuffer: Buffer, masterData: Record<string, string>): Promise<Buffer> {
+async function handleExcelProcessing(fileBuffer: Buffer, masterData: Record<string, string>): Promise<{ filledBuffer: Buffer; previewData: PreviewData[] }> {
     const vendorData = Object.entries(masterData).map(([fieldName, value]) => ({ fieldName, value }));
 
     const workbook = new ExcelJS.Workbook();
@@ -57,7 +64,6 @@ async function handleExcelProcessing(fileBuffer: Buffer, masterData: Record<stri
     const supplierFormCells: { cell: string; value: string }[] = [];
     worksheet.eachRow({ includeEmpty: true }, (row) => {
       row.eachCell({ includeEmpty: true }, (cell) => {
-        // Skip merged slave cells to prevent crashes
         if (cell.type !== 1) { 
             supplierFormCells.push({ cell: cell.address, value: cell.text ?? '' });
         }
@@ -84,16 +90,17 @@ async function handleExcelProcessing(fileBuffer: Buffer, masterData: Record<stri
         throw new Error("The Excel writer failed to generate a valid file. The output was empty or invalid.");
     }
 
-    return filledExcelBuffer;
+    const previewData = fillInstructions.map(instr => ({ cell: instr.targetCell, value: instr.value }));
+
+    return { filledBuffer: filledExcelBuffer, previewData };
 }
 
 
-async function handlePdfProcessing(fileBuffer: Buffer, masterData: Record<string, string>): Promise<Buffer> {
+async function handlePdfProcessing(fileBuffer: Buffer, masterData: Record<string, string>): Promise<{ filledBuffer: Buffer; previewData: PreviewData[] }> {
     const pdfDoc = await PDFDocument.load(fileBuffer);
     const form = pdfDoc.getForm();
     const fields = form.getFields();
 
-    // If it's a fillable form, use the existing, reliable logic.
     if (fields.length > 0) {
         const pdfFieldNames = fields.map(field => field.getName());
         const vendorData = Object.entries(masterData).map(([fieldName, value]) => ({ fieldName, value }));
@@ -109,10 +116,11 @@ async function handlePdfProcessing(fileBuffer: Buffer, masterData: Record<string
             );
         }
 
+        const previewData = fillInstructions.map(instr => ({ cell: instr.pdfFieldName, value: instr.value }));
+
         for (const instruction of fillInstructions) {
             try {
                 const field = form.getField(instruction.pdfFieldName);
-                // This only supports text fields. Other types would need more logic.
                 field.setText(instruction.value);
             } catch (e) {
                 console.warn(`Could not fill PDF field '${instruction.pdfFieldName}':`, e);
@@ -120,11 +128,10 @@ async function handlePdfProcessing(fileBuffer: Buffer, masterData: Record<string
         }
 
         const pdfBytes = await pdfDoc.save();
-        return Buffer.from(pdfBytes);
+        const filledBuffer = Buffer.from(pdfBytes);
+        return { filledBuffer, previewData };
     } 
-    // ---- For FLAT (non-fillable) PDFs, we now show an error ----
     else {
-      // The 'pdf-parse' library causes a server crash, so this feature is disabled.
       throw new Error(
         "The uploaded PDF is not a standard fillable form. Processing for flat (non-fillable) PDFs is not currently supported due to a library incompatibility. Please use a fillable PDF."
       );
@@ -132,13 +139,12 @@ async function handlePdfProcessing(fileBuffer: Buffer, masterData: Record<string
 }
 
 
-// Main logic for the form submission
+// Main logic for the form submission - generates the initial preview
 export async function processForm(
   prevState: FormState,
   formData: FormData
 ): Promise<FormState> {
     try {
-        // --- 1. File Reading & Validation ---
         const file = formData.get("file") as File;
         if (!file || file.size === 0) {
           return createErrorState("Please upload a valid supplier form.");
@@ -149,7 +155,6 @@ export async function processForm(
             return createErrorState("The uploaded file appears to be empty.");
         }
 
-        // --- 2. Master Data Parsing ---
         const masterDataJSON = formData.get("masterData") as string | null;
         if (!masterDataJSON) {
           return createErrorState("Master data is missing. Please go back to Step 1.");
@@ -160,26 +165,99 @@ export async function processForm(
         }
         
         let filledFileBuffer: Buffer;
+        let previewData: PreviewData[];
         
-        // --- 3. Route to correct processor based on file type ---
         if (file.type === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet") {
-            filledFileBuffer = await handleExcelProcessing(fileBuffer, masterDataRecord);
+            const result = await handleExcelProcessing(fileBuffer, masterDataRecord);
+            filledFileBuffer = result.filledBuffer;
+            previewData = result.previewData;
         } else if (file.type === "application/pdf") {
-            filledFileBuffer = await handlePdfProcessing(fileBuffer, masterDataRecord);
+            const result = await handlePdfProcessing(fileBuffer, masterDataRecord);
+            filledFileBuffer = result.filledBuffer;
+            previewData = result.previewData;
         } else {
             return createErrorState("Invalid file type. Please upload an .xlsx or .pdf file.");
         }
         
-        // --- 4. Success State Creation ---
         return {
-          status: "success",
-          message: "File processed successfully!",
+          status: "preview",
+          message: "Preview your auto-filled form. You can make corrections before downloading.",
           fileData: filledFileBuffer.toString("base64"),
           fileName: `filled-${file.name}`,
           mimeType: file.type,
+          previewData: previewData
         };
 
     } catch (error) {
-        return createErrorState("A critical error occurred during the form filling process.", error);
+        return createErrorState("A critical error occurred during the initial form filling process.", error);
+    }
+}
+
+// New action to apply corrections from the preview step
+export async function applyCorrections(
+  prevState: FormState,
+  formData: FormData
+): Promise<FormState> {
+    try {
+        const correctionRequest = formData.get("correctionRequest") as string;
+        const previousFileData = formData.get("fileData") as string;
+        const fileName = formData.get("fileName") as string;
+        const mimeType = formData.get("mimeType") as string;
+
+        if (!previousFileData) {
+            return createErrorState("Could not find the previous file data. Please start over.");
+        }
+        if (!correctionRequest) {
+            return createErrorState("Correction request is empty. Please describe the changes you want to make.");
+        }
+        
+        if (mimeType === 'application/pdf') {
+             return {
+                status: "success",
+                message: "PDF corrections are not yet supported. Your file is ready for download.",
+                fileData: previousFileData,
+                fileName: fileName,
+                mimeType: mimeType,
+            };
+        }
+
+        const fileBuffer = Buffer.from(previousFileData, "base64");
+
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.load(fileBuffer);
+        const worksheet = workbook.worksheets[0];
+        if (!worksheet) {
+          throw new Error("No worksheet found in the Excel file to correct.");
+        }
+        const currentSheetData: { cell: string; value: string }[] = [];
+        worksheet.eachRow({ includeEmpty: true }, (row) => {
+            row.eachCell({ includeEmpty: true }, (cell) => {
+                if (cell.type !== 1) { 
+                    currentSheetData.push({ cell: cell.address, value: cell.text ?? '' });
+                }
+            });
+        });
+
+        const correctionInstructions = await correctFilledForm({
+            userFeedback: correctionRequest,
+            currentSheetData,
+        });
+
+        if (!correctionInstructions || correctionInstructions.length === 0) {
+            return createErrorState("The AI could not understand your correction request. Please try rephrasing it or be more specific about cell locations (e.g., 'Change B5 to...').");
+        }
+        
+        const finalBuffer = await fillExcelData(fileBuffer, correctionInstructions);
+
+        return {
+            status: "success",
+            message: "Corrections applied! Your file is ready for download.",
+            fileData: finalBuffer.toString("base64"),
+            fileName: `corrected-${fileName}`,
+            mimeType: mimeType,
+        };
+
+    } catch (error) {
+        return createErrorState("An error occurred while applying corrections.", error);
     }
 }

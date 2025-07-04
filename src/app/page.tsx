@@ -2,7 +2,6 @@
 "use client";
 
 import React, { useEffect, useState, useActionState } from "react";
-import { useFormStatus } from "react-dom";
 import ExcelJS from "exceljs";
 import {
   Card,
@@ -42,19 +41,23 @@ import {
   Database,
   ListChecks,
   ArrowRight,
-  Terminal,
+  Wand2,
+  FileEdit,
+  RefreshCw,
 } from "lucide-react";
-import { processForm } from "./actions";
+import { Progress } from "@/components/ui/progress";
+import { Textarea } from "@/components/ui/textarea";
+import { processForm, applyCorrections, FormState } from "./actions";
 import { useToast } from "@/hooks/use-toast";
 
-// Simplified initial state
-const initialState = {
-  status: "idle" as "idle" | "success" | "error" | "processing",
+const initialProcessState: FormState = {
+  status: "idle",
   message: "",
   fileData: null,
   fileName: "",
   mimeType: "",
   debugInfo: undefined,
+  previewData: [],
 };
 
 const FileUploadDropzone = ({ file, onFileChange, icon, title, description, inputId, ...props }) => {
@@ -88,12 +91,85 @@ const FileUploadDropzone = ({ file, onFileChange, icon, title, description, inpu
   )
 }
 
+function CorrectionForm({ processState }) {
+  const { toast } = useToast();
+  const [correctionState, correctionAction] = useActionState(applyCorrections, initialProcessState);
+  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (correctionState.status === "error") {
+      toast({
+        variant: "destructive",
+        title: "An Error Occurred",
+        description: correctionState.message,
+      });
+    }
+
+    if (correctionState.status === "success" && correctionState.fileData && correctionState.mimeType) {
+      const byteCharacters = atob(correctionState.fileData);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: correctionState.mimeType });
+      const url = URL.createObjectURL(blob);
+      setDownloadUrl(url);
+      toast({
+        variant: "default",
+        title: "Corrections Applied!",
+        description: "Your file is ready for download.",
+      });
+    }
+  }, [correctionState, toast]);
+
+  return (
+    <form action={correctionAction} className="space-y-4">
+      <input type="hidden" name="fileData" value={processState.fileData ?? ""} />
+      <input type="hidden" name="fileName" value={processState.fileName ?? ""} />
+      <input type="hidden" name="mimeType" value={processState.mimeType ?? ""} />
+
+      <Textarea
+        name="correctionRequest"
+        placeholder="e.g., Change the value in B5 to 'Completed'. Remove the value from C10."
+        className="min-h-[100px]"
+        required
+      />
+
+      {correctionState.status === 'processing' && (
+        <Progress value={50} className="w-full" />
+      )}
+
+      {correctionState.status === "error" && correctionState.message && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Correction Error</AlertTitle>
+          <AlertDescription>{correctionState.message}</AlertDescription>
+        </Alert>
+      )}
+
+      <div className="flex flex-col gap-2">
+        {downloadUrl ? (
+          <a href={downloadUrl} download={correctionState.fileName} className="w-full">
+            <Button className="w-full" size="lg" variant="default" type="button">
+              <Download className="mr-2 h-4 w-4" />
+              Download Corrected Form
+            </Button>
+          </a>
+        ) : (
+          <Button type="submit" className="w-full" size="lg" disabled={correctionState.status === 'processing'}>
+            {correctionState.status === 'processing' ? <><Loader className="mr-2 h-4 w-4 animate-spin" /> Correcting...</> : <><Wand2 className="mr-2 h-4 w-4" /> Apply Corrections</>}
+          </Button>
+        )}
+      </div>
+    </form>
+  )
+}
 
 export default function Home() {
   const { toast } = useToast();
-  const [state, formAction] = useActionState(processForm, initialState);
-  const { pending } = useFormStatus();
-
+  const [processState, processAction] = useActionState(processForm, initialProcessState);
+  
   const [currentTab, setCurrentTab] = useState("master-data");
   
   const [masterData, setMasterData] = useState<Record<string, string> | null>(null);
@@ -101,35 +177,29 @@ export default function Home() {
   const [masterDataStatus, setMasterDataStatus] = useState<"idle" | "parsing" | "success" | "error">("idle");
 
   const [vendorFormFile, setVendorFormFile] = useState<File | null>(null);
-  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const [directDownloadUrl, setDirectDownloadUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    if (state.status === "error") {
+    if (processState.status === "error") {
       toast({
         variant: "destructive",
         title: "An Error Occurred",
-        description: state.message,
+        description: processState.message,
       });
     }
 
-    if (state.status === "success" && state.fileData && state.mimeType) {
-      const byteCharacters = atob(state.fileData);
+    if (processState.status === "preview" && processState.fileData && processState.mimeType) {
+      const byteCharacters = atob(processState.fileData);
       const byteNumbers = new Array(byteCharacters.length);
       for (let i = 0; i < byteCharacters.length; i++) {
         byteNumbers[i] = byteCharacters.charCodeAt(i);
       }
       const byteArray = new Uint8Array(byteNumbers);
-      const blob = new Blob([byteArray], { type: state.mimeType });
+      const blob = new Blob([byteArray], { type: processState.mimeType });
       const url = URL.createObjectURL(blob);
-      setDownloadUrl(url);
-
-      toast({
-        variant: "default",
-        title: "Processing Complete!",
-        description: "Your file is ready for download.",
-      });
+      setDirectDownloadUrl(url); // For the "Download As Is" button
     }
-  }, [state, toast]);
+  }, [processState, toast]);
   
   const handleMasterDataFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -156,11 +226,7 @@ export default function Home() {
       const isValid = selectedFile && (selectedFile.name.endsWith(".xlsx") || selectedFile.name.endsWith(".pdf"));
       if (isValid) {
         setVendorFormFile(selectedFile);
-        setDownloadUrl(null);
-        if (state.status !== "idle") {
-           initialState.status = "idle";
-           initialState.message = "";
-        }
+        setDirectDownloadUrl(null);
       } else {
         setVendorFormFile(null);
         toast({
@@ -212,10 +278,19 @@ export default function Home() {
     }
   };
 
+  const resetFormFill = () => {
+      setVendorFormFile(null);
+      setDirectDownloadUrl(null);
+      // A bit of a hack to reset the form action state
+      (processState as any).status = "idle";
+      (processState as any).message = "";
+  }
+
+  const isProcessing = processState.status === 'processing';
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-4 sm:p-8">
-      <Card className="w-full max-w-2xl shadow-2xl">
+      <Card className="w-full max-w-3xl shadow-2xl">
         <CardHeader className="text-center">
           <div className="mx-auto bg-primary text-primary-foreground rounded-full p-3 w-fit mb-4">
             <FileSpreadsheet className="h-8 w-8" />
@@ -230,7 +305,7 @@ export default function Home() {
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="master-data">Step 1: Upload</TabsTrigger>
             <TabsTrigger value="preview-data" disabled={!masterData}>Step 2: Preview</TabsTrigger>
-            <TabsTrigger value="fill-form" disabled={!masterData}>Step 3: Fill Form</TabsTrigger>
+            <TabsTrigger value="fill-form" disabled={!masterData}>Step 3: Fill & Correct</TabsTrigger>
           </TabsList>
 
           <TabsContent value="master-data">
@@ -244,20 +319,6 @@ export default function Home() {
                 description="Excel files only (.xlsx)"
                 inputId="master-data-upload"
               />
-               {masterDataStatus === "error" && (
-                <Alert variant="destructive">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertTitle>Parsing Error</AlertTitle>
-                  <AlertDescription>Could not parse master data. Please check the file format and try again.</AlertDescription>
-                </Alert>
-              )}
-               {masterDataStatus === "success" && (
-                <Alert>
-                  <CheckCircle2 className="h-4 w-4 text-primary" />
-                  <AlertTitle>Success</AlertTitle>
-                  <AlertDescription>{Object.keys(masterData || {}).length} records loaded. Ready for Step 2.</AlertDescription>
-                </Alert>
-              )}
             </CardContent>
             <CardFooter>
               <Button onClick={handleMasterDataParse} disabled={!masterDataFile || masterDataStatus === 'parsing'} className="w-full" size="lg">
@@ -303,76 +364,94 @@ export default function Home() {
           </TabsContent>
 
           <TabsContent value="fill-form">
-            <form action={formAction}>
-              <CardContent className="space-y-6 pt-6">
-                <input type="hidden" name="masterData" value={JSON.stringify(masterData ?? {})} />
-                <FileUploadDropzone
-                    file={vendorFormFile}
-                    onFileChange={handleVendorFormFileChange}
-                    icon={<CloudUpload className="h-10 w-10 text-muted-foreground" />}
-                    title="Upload Supplier Form To Fill"
-                    description="Excel or PDF files only (.xlsx, .pdf)"
-                    inputId="file"
-                    name="file"
-                    required
-                />
-                
-                {pending && (
-                  <div className="space-y-4 rounded-md border p-4">
-                     <div className="flex items-center gap-3 text-primary">
-                        <Loader className="h-5 w-5 animate-spin text-accent" />
-                        <span className="font-medium">AI is analyzing and filling your form...</span>
-                     </div>
-                  </div>
-                )}
-                
-                {state.status === "error" && state.message && (
-                  <Alert variant="destructive">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertTitle>Error</AlertTitle>
-                    <AlertDescription>{state.message}</AlertDescription>
-
-                    {state.debugInfo && (
-                       <div className="mt-4">
-                          <h3 className="font-semibold mb-2">Debug Information</h3>
-                          <ScrollArea className="h-40 w-full rounded-md border p-2">
-                             <pre className="text-xs whitespace-pre-wrap"><code>{state.debugInfo}</code></pre>
-                          </ScrollArea>
-                        </div>
+            {processState.status !== 'preview' ? (
+                <form action={processAction}>
+                  <CardContent className="space-y-6 pt-6">
+                    <input type="hidden" name="masterData" value={JSON.stringify(masterData ?? {})} />
+                    <FileUploadDropzone
+                        file={vendorFormFile}
+                        onFileChange={handleVendorFormFileChange}
+                        icon={<CloudUpload className="h-10 w-10 text-muted-foreground" />}
+                        title="Upload Supplier Form To Fill"
+                        description="Excel or PDF files only (.xlsx, .pdf)"
+                        inputId="file"
+                        name="file"
+                        required
+                    />
+                    
+                    {isProcessing && (
+                      <div className="space-y-2">
+                         <div className="flex items-center gap-3 text-primary">
+                            <Loader className="h-5 w-5 animate-spin text-accent" />
+                            <span className="font-medium">AI is analyzing and filling your form...</span>
+                         </div>
+                         <Progress value={50} className="w-full" />
+                      </div>
                     )}
-                  </Alert>
-                )}
-
-              </CardContent>
-              <CardFooter className="flex flex-col gap-4">
-                {downloadUrl ? (
-                  <a
-                    href={downloadUrl}
-                    download={state.fileName}
-                    className="w-full"
-                  >
-                    <Button className="w-full" size="lg" variant="default" type="button">
-                      <Download className="mr-2 h-4 w-4" />
-                      Download Filled Form
+                    
+                    {processState.status === "error" && processState.message && (
+                      <Alert variant="destructive">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertTitle>Error</AlertTitle>
+                        <AlertDescription>{processState.message}</AlertDescription>
+                      </Alert>
+                    )}
+                  </CardContent>
+                  <CardFooter>
+                    <Button type="submit" disabled={isProcessing || !vendorFormFile} className="w-full" size="lg">
+                        {isProcessing ? <><Loader className="mr-2 h-4 w-4 animate-spin" /> Processing...</> : <><Zap className="mr-2 h-4 w-4" /> Auto-Fill Form</>}
                     </Button>
-                  </a>
-                ) : (
-                   <Button type="submit" disabled={pending || !vendorFormFile} className="w-full" size="lg">
-                    {pending ? (
-                      <>
-                        <Loader className="mr-2 h-4 w-4 animate-spin" />
-                        Processing...
-                      </>
-                    ) : (
-                      <>
-                        <Zap className="mr-2 h-4 w-4" />
-                        Auto-Fill Form
-                      </>
+                  </CardFooter>
+                </form>
+              ) : (
+                <CardContent className="space-y-4 pt-6">
+                  <Alert>
+                    <FileEdit className="h-4 w-4" />
+                    <AlertTitle>Preview & Correct</AlertTitle>
+                    <AlertDescription>
+                      The AI has filled the form. Review the changes below. If anything is wrong, describe the correction and the AI will fix it.
+                    </AlertDescription>
+                  </Alert>
+                  <ScrollArea className="h-60 w-full rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Cell / Field</TableHead>
+                          <TableHead>Value Filled</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {processState.previewData?.map((item) => (
+                          <TableRow key={item.cell}>
+                            <TableCell className="font-mono">{item.cell}</TableCell>
+                            <TableCell className="font-medium">{item.value}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </ScrollArea>
+                  
+                  <div>
+                    <h3 className="mb-2 font-semibold">Make Corrections (Optional)</h3>
+                    <CorrectionForm processState={processState} />
+                  </div>
+                  
+                  <CardFooter className="flex-col gap-4 px-0 pb-0">
+                    {directDownloadUrl && (
+                       <a href={directDownloadUrl} download={processState.fileName} className="w-full">
+                         <Button className="w-full" size="lg" variant="outline">
+                           <Download className="mr-2 h-4 w-4" />
+                           Download As Is
+                         </Button>
+                       </a>
                     )}
-                  </Button>
-                )}
-              </CardFooter>
-            </form>
+                     <Button variant="ghost" onClick={resetFormFill} className="w-full">
+                        <RefreshCw className="mr-2 h-4 w-4"/>
+                        Start Over with a new Form
+                     </Button>
+                  </CardFooter>
+                </CardContent>
+            )}
           </TabsContent>
         </Tabs>
       </Card>
