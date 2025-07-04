@@ -3,9 +3,11 @@
 
 import { fillSupplierForm } from "@/ai/flows/fill-supplier-form";
 import { mapDataToPdfFields } from "@/ai/flows/map-data-to-pdf-fields";
+import { reconstructPdfWithData } from "@/ai/flows/reconstruct-pdf-with-data";
 import { fillExcelData } from "@/lib/excel-writer";
 import ExcelJS from "exceljs";
-import { PDFDocument } from "pdf-lib";
+import { PDFDocument, StandardFonts } from "pdf-lib";
+import pdf from "pdf-parse";
 
 interface FormState {
   status: "idle" | "success" | "error" | "processing";
@@ -56,6 +58,7 @@ async function handleExcelProcessing(fileBuffer: Buffer, masterData: Record<stri
     const supplierFormCells: { cell: string; value: string }[] = [];
     worksheet.eachRow({ includeEmpty: true }, (row) => {
       row.eachCell({ includeEmpty: true }, (cell) => {
+        // Skip merged slave cells to prevent crashes
         if (cell.type !== 1) { 
             supplierFormCells.push({ cell: cell.address, value: cell.text ?? '' });
         }
@@ -91,36 +94,73 @@ async function handlePdfProcessing(fileBuffer: Buffer, masterData: Record<string
     const form = pdfDoc.getForm();
     const fields = form.getFields();
 
-    if (fields.length === 0) {
-        throw new Error("The uploaded PDF is not a fillable form. Only standard PDF forms with fillable fields are currently supported.");
-    }
+    // If it's a fillable form, use the existing, reliable logic.
+    if (fields.length > 0) {
+        const pdfFieldNames = fields.map(field => field.getName());
+        const vendorData = Object.entries(masterData).map(([fieldName, value]) => ({ fieldName, value }));
 
-    const pdfFieldNames = fields.map(field => field.getName());
-    const vendorData = Object.entries(masterData).map(([fieldName, value]) => ({ fieldName, value }));
-
-    const fillInstructions = await mapDataToPdfFields({
-        vendorData,
-        pdfFieldNames,
-    });
-    
-    if (!fillInstructions || fillInstructions.length === 0) {
-        throw new Error(
-            "The AI could not confidently map any fields from your master data to the PDF form fields. Please ensure the PDF has clearly named fields."
-        );
-    }
-
-    for (const instruction of fillInstructions) {
-        try {
-            const field = form.getField(instruction.pdfFieldName);
-            // NOTE: This currently only supports text fields. Checkboxes, radio buttons, etc. would require more complex logic.
-            field.setText(instruction.value);
-        } catch (e) {
-            console.warn(`Could not fill PDF field '${instruction.pdfFieldName}' with value '${instruction.value}':`, e);
+        const fillInstructions = await mapDataToPdfFields({
+            vendorData,
+            pdfFieldNames,
+        });
+        
+        if (!fillInstructions || fillInstructions.length === 0) {
+            throw new Error(
+                "This is a fillable PDF, but the AI could not map any data to its fields. Please check the PDF's field names."
+            );
         }
-    }
 
-    const pdfBytes = await pdfDoc.save();
-    return Buffer.from(pdfBytes);
+        for (const instruction of fillInstructions) {
+            try {
+                const field = form.getField(instruction.pdfFieldName);
+                // This only supports text fields. Other types would need more logic.
+                field.setText(instruction.value);
+            } catch (e) {
+                console.warn(`Could not fill PDF field '${instruction.pdfFieldName}':`, e);
+            }
+        }
+
+        const pdfBytes = await pdfDoc.save();
+        return Buffer.from(pdfBytes);
+    } 
+    // ---- NEW FALLBACK LOGIC for FLAT (non-fillable) PDFs ----
+    else {
+        // 1. Extract text using pdf-parse
+        const data = await pdf(fileBuffer);
+        const pdfTextContent = data.text;
+
+        if (!pdfTextContent || pdfTextContent.trim().length < 10) {
+             throw new Error("The uploaded PDF appears to be a scanned image or has no text content. It cannot be processed automatically.");
+        }
+
+        // 2. Call the new AI flow to reconstruct the text
+        const reconstructedText = await reconstructPdfWithData({
+            masterData: masterData,
+            pdfTextContent: pdfTextContent,
+        });
+
+        if (!reconstructedText || reconstructedText.trim() === '') {
+            throw new Error("The AI failed to generate the filled document text.");
+        }
+
+        // 3. Create a new PDF from the AI's text response
+        const newPdfDoc = await PDFDocument.create();
+        const page = newPdfDoc.addPage();
+        const { width, height } = page.getSize();
+        const font = await newPdfDoc.embedFont(StandardFonts.Helvetica);
+        
+        page.drawText(reconstructedText, {
+            x: 50,
+            y: height - 50,
+            size: 11,
+            font: font,
+            lineHeight: 14,
+            maxWidth: width - 100,
+        });
+
+        const pdfBytes = await newPdfDoc.save();
+        return Buffer.from(pdfBytes);
+    }
 }
 
 
