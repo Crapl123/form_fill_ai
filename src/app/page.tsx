@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Table,
@@ -44,6 +45,7 @@ import {
   Wand2,
   FileEdit,
   RefreshCw,
+  HelpCircle,
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
@@ -58,6 +60,7 @@ const initialProcessState: FormState = {
   mimeType: "",
   debugInfo: undefined,
   previewData: [],
+  missingFields: [],
 };
 
 const FileUploadDropzone = ({ file, onFileChange, icon, title, description, inputId, ...props }) => {
@@ -93,7 +96,7 @@ const FileUploadDropzone = ({ file, onFileChange, icon, title, description, inpu
 
 function CorrectionForm({ processState }) {
   const { toast } = useToast();
-  const [correctionState, correctionAction] = useActionState(applyCorrections, initialProcessState);
+  const [correctionState, correctionAction, isSubmittingCorrections] = useActionState(applyCorrections, initialProcessState);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -124,19 +127,43 @@ function CorrectionForm({ processState }) {
   }, [correctionState, toast]);
 
   return (
-    <form action={correctionAction} className="space-y-4">
+    <form action={correctionAction} className="space-y-6">
       <input type="hidden" name="fileData" value={processState.fileData ?? ""} />
       <input type="hidden" name="fileName" value={processState.fileName ?? ""} />
       <input type="hidden" name="mimeType" value={processState.mimeType ?? ""} />
+      
+      {processState.missingFields && processState.missingFields.length > 0 && (
+          <div className="space-y-4 rounded-lg border border-yellow-500/50 bg-yellow-500/10 p-4">
+              <div className="flex items-center gap-2">
+                 <HelpCircle className="h-5 w-5 text-yellow-600" />
+                 <h3 className="font-semibold text-yellow-800 dark:text-yellow-300">Missing Information</h3>
+              </div>
+              <p className="text-sm text-muted-foreground">The AI identified these fields in the form but couldn't find matching data in your master sheet. Please provide the values below.</p>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {processState.missingFields.map(item => (
+                    <div className="space-y-2" key={item.targetCell}>
+                        <Label htmlFor={`missing_${item.targetCell}`}>{item.labelGuessed}</Label>
+                        <Input 
+                            id={`missing_${item.targetCell}`}
+                            name={`missing_${item.targetCell}`}
+                            placeholder={`Enter value for ${item.labelGuessed}...`}
+                        />
+                    </div>
+                ))}
+              </div>
+          </div>
+      )}
 
-      <Textarea
-        name="correctionRequest"
-        placeholder="e.g., Change the value in B5 to 'Completed'. Remove the value from C10."
-        className="min-h-[100px]"
-        required
-      />
+      <div>
+          <h3 className="mb-2 font-semibold">Make Text-based Corrections (Optional)</h3>
+          <Textarea
+            name="correctionRequest"
+            placeholder="e.g., Change the value in B5 to 'Completed'. Remove the value from C10."
+            className="min-h-[100px]"
+          />
+      </div>
 
-      {correctionState.status === 'processing' && (
+      {isSubmittingCorrections && (
         <Progress value={50} className="w-full" />
       )}
 
@@ -157,8 +184,8 @@ function CorrectionForm({ processState }) {
             </Button>
           </a>
         ) : (
-          <Button type="submit" className="w-full" size="lg" disabled={correctionState.status === 'processing'}>
-            {correctionState.status === 'processing' ? <><Loader className="mr-2 h-4 w-4 animate-spin" /> Correcting...</> : <><Wand2 className="mr-2 h-4 w-4" /> Apply Corrections</>}
+          <Button type="submit" className="w-full" size="lg" disabled={isSubmittingCorrections}>
+            {isSubmittingCorrections ? <><Loader className="mr-2 h-4 w-4 animate-spin" /> Applying Changes...</> : <><Wand2 className="mr-2 h-4 w-4" /> Apply Changes & Download</>}
           </Button>
         )}
       </div>
@@ -168,7 +195,7 @@ function CorrectionForm({ processState }) {
 
 export default function Home() {
   const { toast } = useToast();
-  const [processState, processAction] = useActionState(processForm, initialProcessState);
+  const [processState, processAction, isProcessing] = useActionState(processForm, initialProcessState);
   
   const [currentTab, setCurrentTab] = useState("master-data");
   
@@ -227,6 +254,10 @@ export default function Home() {
       if (isValid) {
         setVendorFormFile(selectedFile);
         setDirectDownloadUrl(null);
+        // Reset process state if a new file is uploaded
+        if (processState.status !== 'idle') {
+            (processState as any).status = 'idle';
+        }
       } else {
         setVendorFormFile(null);
         toast({
@@ -284,13 +315,13 @@ export default function Home() {
       // A bit of a hack to reset the form action state
       (processState as any).status = "idle";
       (processState as any).message = "";
+      (processState as any).missingFields = [];
+      (processState as any).previewData = [];
   }
-
-  const isProcessing = processState.status === 'processing';
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-4 sm:p-8">
-      <Card className="w-full max-w-3xl shadow-2xl">
+      <Card className="w-full max-w-4xl shadow-2xl">
         <CardHeader className="text-center">
           <div className="mx-auto bg-primary text-primary-foreground rounded-full p-3 w-fit mb-4">
             <FileSpreadsheet className="h-8 w-8" />
@@ -407,9 +438,9 @@ export default function Home() {
                 <CardContent className="space-y-4 pt-6">
                   <Alert>
                     <FileEdit className="h-4 w-4" />
-                    <AlertTitle>Preview & Correct</AlertTitle>
+                    <AlertTitle>Preview, Fill & Correct</AlertTitle>
                     <AlertDescription>
-                      The AI has filled the form. Review the changes below. If anything is wrong, describe the correction and the AI will fix it.
+                      The AI has filled what it can. Please provide any missing information and make corrections below.
                     </AlertDescription>
                   </Alert>
 
@@ -422,39 +453,43 @@ export default function Home() {
                       />
                     </div>
                   ) : (
-                    <ScrollArea className="h-60 w-full rounded-md border">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Guessed Label</TableHead>
-                            <TableHead>Cell Filled</TableHead>
-                            <TableHead>Value Filled</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {processState.previewData?.map((item) => (
-                            <TableRow key={item.cell}>
-                              <TableCell className="text-muted-foreground">{item.labelGuessed || 'N/A'}</TableCell>
-                              <TableCell className="font-mono">{item.cell}</TableCell>
-                              <TableCell className="font-medium">{item.value}</TableCell>
+                    <div>
+                        <h3 className="mb-2 font-semibold">AI Auto-Filled Data</h3>
+                        <ScrollArea className="h-60 w-full rounded-md border">
+                        <Table>
+                            <TableHeader>
+                            <TableRow>
+                                <TableHead>Guessed Label</TableHead>
+                                <TableHead>Cell Filled</TableHead>
+                                <TableHead>Value Filled</TableHead>
                             </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </ScrollArea>
+                            </TableHeader>
+                            <TableBody>
+                            {processState.previewData?.length > 0 ? processState.previewData?.map((item) => (
+                                <TableRow key={item.cell}>
+                                <TableCell className="text-muted-foreground">{item.labelGuessed || 'N/A'}</TableCell>
+                                <TableCell className="font-mono">{item.cell}</TableCell>
+                                <TableCell className="font-medium">{item.value}</TableCell>
+                                </TableRow>
+                            )) : (
+                                <TableRow>
+                                    <TableCell colSpan={3} className="text-center text-muted-foreground">The AI could not fill any fields automatically.</TableCell>
+                                </TableRow>
+                            )}
+                            </TableBody>
+                        </Table>
+                        </ScrollArea>
+                    </div>
                   )}
                   
-                  <div>
-                    <h3 className="mb-2 font-semibold">Make Corrections (Optional)</h3>
-                    <CorrectionForm processState={processState} />
-                  </div>
+                  <CorrectionForm processState={processState} />
                   
-                  <CardFooter className="flex-col gap-4 px-0 pb-0">
+                  <CardFooter className="flex-col gap-4 px-0 pb-0 pt-4">
                     {directDownloadUrl && (
                        <a href={directDownloadUrl} download={processState.fileName} className="w-full">
                          <Button className="w-full" size="lg" variant="outline">
                            <Download className="mr-2 h-4 w-4" />
-                           Download As Is
+                           Download Initial Filled Form
                          </Button>
                        </a>
                     )}

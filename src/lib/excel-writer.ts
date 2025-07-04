@@ -1,3 +1,4 @@
+
 import ExcelJS from "exceljs";
 
 // Define the structure for the fill instructions
@@ -30,16 +31,12 @@ export async function fillExcelData(
       try {
         const cell = worksheet.getCell(instruction.targetCell);
         
-        // Additional safety check: only write to empty cells, as requested in the prompt.
-        // This is a safeguard in case the AI makes a mistake.
-        const cellHasValue = cell.value !== null && cell.value?.toString().trim() !== '';
-        if (!cellHasValue) {
-            cell.value = instruction.value;
-            // Optional: Add some basic styling to show it was auto-filled
-            cell.font = { ...cell.font, color: { argb: 'FF3F51B5' }, bold: true };
-        } else {
-            console.warn(`AI tried to overwrite a non-empty cell (${instruction.targetCell}). Skipping.`);
-        }
+        // Overwrite the cell value regardless of its current content.
+        // The correction logic depends on being able to change existing values.
+        cell.value = instruction.value;
+        
+        // Optional: Add some basic styling to show it was auto-filled/corrected
+        cell.font = { ...cell.font, color: { argb: 'FF3F51B5' }, bold: true };
 
       } catch (e) {
         console.warn(`Could not write to cell ${instruction.targetCell}:`, e);

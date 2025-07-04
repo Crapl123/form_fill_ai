@@ -4,15 +4,19 @@
 import { correctFilledForm } from "@/ai/flows/correct-filled-form";
 import { fillSupplierForm } from "@/ai/flows/fill-supplier-form";
 import { mapDataToPdfFields } from "@/ai/flows/map-data-to-pdf-fields";
-import { reconstructPdfWithData } from "@/ai/flows/reconstruct-pdf-with-data";
-import { fillExcelData } from "@/lib/excel-writer";
+import { fillExcelData, FillInstruction } from "@/lib/excel-writer";
 import ExcelJS from "exceljs";
 import { PDFDocument } from "pdf-lib";
 
-interface PreviewData {
+interface FilledField {
   cell: string;
   value: string;
   labelGuessed?: string;
+}
+
+interface MissingField {
+    labelGuessed: string;
+    targetCell: string;
 }
 
 export interface FormState {
@@ -22,7 +26,8 @@ export interface FormState {
   fileName: string;
   mimeType: string;
   debugInfo?: string;
-  previewData?: PreviewData[];
+  previewData?: FilledField[];
+  missingFields?: MissingField[];
 }
 
 function createErrorState(message: string, error?: unknown): FormState {
@@ -52,7 +57,7 @@ function createErrorState(message: string, error?: unknown): FormState {
     };
 }
 
-async function handleExcelProcessing(fileBuffer: Buffer, masterData: Record<string, string>): Promise<{ filledBuffer: Buffer; previewData: PreviewData[] }> {
+async function handleExcelProcessing(fileBuffer: Buffer, masterData: Record<string, string>): Promise<{ filledBuffer: Buffer; previewData: FilledField[], missingFields: MissingField[] }> {
     const vendorData = Object.entries(masterData).map(([fieldName, value]) => ({ fieldName, value }));
 
     const workbook = new ExcelJS.Workbook();
@@ -75,33 +80,35 @@ async function handleExcelProcessing(fileBuffer: Buffer, masterData: Record<stri
         throw new Error("The first sheet of the Excel file appears to have no content to analyze.");
     }
 
-    const fillInstructions = await fillSupplierForm({
+    const aiResponse = await fillSupplierForm({
         vendorData,
         supplierFormCells
     });
 
-    if (!fillInstructions || fillInstructions.length === 0) {
+    if (!aiResponse || (!aiResponse.fieldsToFill?.length && !aiResponse.fieldsToQuery?.length)) {
         throw new Error(
-            "The AI could not confidently map any fields from your master data to the supplier form. Please ensure the form has clear labels that correspond to your master data."
+            "The AI could not identify any fields in the supplier form. Please ensure the form is not blank and has clear labels."
         );
     }
+    
+    const { fieldsToFill, fieldsToQuery } = aiResponse;
 
-    const filledExcelBuffer = await fillExcelData(fileBuffer, fillInstructions);
+    const filledExcelBuffer = await fillExcelData(fileBuffer, fieldsToFill);
     if (!filledExcelBuffer || !(filledExcelBuffer instanceof Buffer) || filledExcelBuffer.length === 0) {
         throw new Error("The Excel writer failed to generate a valid file. The output was empty or invalid.");
     }
 
-    const previewData = fillInstructions.map(instr => ({
+    const previewData = fieldsToFill.map(instr => ({
       cell: instr.targetCell,
       value: instr.value,
       labelGuessed: instr.labelGuessed,
     }));
 
-    return { filledBuffer: filledExcelBuffer, previewData };
+    return { filledBuffer: filledExcelBuffer, previewData, missingFields: fieldsToQuery };
 }
 
 
-async function handlePdfProcessing(fileBuffer: Buffer, masterData: Record<string, string>): Promise<{ filledBuffer: Buffer; previewData: PreviewData[] }> {
+async function handlePdfProcessing(fileBuffer: Buffer, masterData: Record<string, string>): Promise<{ filledBuffer: Buffer; previewData: FilledField[], missingFields: MissingField[] }> {
     const pdfDoc = await PDFDocument.load(fileBuffer);
     const form = pdfDoc.getForm();
     const fields = form.getFields();
@@ -134,7 +141,8 @@ async function handlePdfProcessing(fileBuffer: Buffer, masterData: Record<string
 
         const pdfBytes = await pdfDoc.save();
         const filledBuffer = Buffer.from(pdfBytes);
-        return { filledBuffer, previewData };
+        // "Asking for missing fields" is not yet supported for PDFs.
+        return { filledBuffer, previewData, missingFields: [] };
     } 
     else {
       throw new Error(
@@ -170,16 +178,19 @@ export async function processForm(
         }
         
         let filledFileBuffer: Buffer;
-        let previewData: PreviewData[];
+        let previewData: FilledField[];
+        let missingFields: MissingField[];
         
         if (file.type === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet") {
             const result = await handleExcelProcessing(fileBuffer, masterDataRecord);
             filledFileBuffer = result.filledBuffer;
             previewData = result.previewData;
+            missingFields = result.missingFields;
         } else if (file.type === "application/pdf") {
             const result = await handlePdfProcessing(fileBuffer, masterDataRecord);
             filledFileBuffer = result.filledBuffer;
             previewData = result.previewData;
+            missingFields = result.missingFields;
         } else {
             return createErrorState("Invalid file type. Please upload an .xlsx or .pdf file.");
         }
@@ -190,7 +201,8 @@ export async function processForm(
           fileData: filledFileBuffer.toString("base64"),
           fileName: `filled-${file.name}`,
           mimeType: file.type,
-          previewData: previewData
+          previewData: previewData,
+          missingFields: missingFields
         };
 
     } catch (error) {
@@ -212,14 +224,11 @@ export async function applyCorrections(
         if (!previousFileData) {
             return createErrorState("Could not find the previous file data. Please start over.");
         }
-        if (!correctionRequest) {
-            return createErrorState("Correction request is empty. Please describe the changes you want to make.");
-        }
         
         if (mimeType === 'application/pdf') {
              return {
                 status: "success",
-                message: "PDF corrections are not yet supported. Your file is ready for download.",
+                message: "PDF corrections and filling missing fields are not yet supported. Your file is ready for download.",
                 fileData: previousFileData,
                 fileName: fileName,
                 mimeType: mimeType,
@@ -228,31 +237,54 @@ export async function applyCorrections(
 
         const fileBuffer = Buffer.from(previousFileData, "base64");
 
-        const workbook = new ExcelJS.Workbook();
-        await workbook.xlsx.load(fileBuffer);
-        const worksheet = workbook.worksheets[0];
-        if (!worksheet) {
-          throw new Error("No worksheet found in the Excel file to correct.");
-        }
-        const currentSheetData: { cell: string; value: string }[] = [];
-        worksheet.eachRow({ includeEmpty: true }, (row) => {
-            row.eachCell({ includeEmpty: true }, (cell) => {
-                if (cell.type !== 1) { 
-                    currentSheetData.push({ cell: cell.address, value: cell.text ?? '' });
-                }
-            });
-        });
-
-        const correctionInstructions = await correctFilledForm({
-            userFeedback: correctionRequest,
-            currentSheetData,
-        });
-
-        if (!correctionInstructions || correctionInstructions.length === 0) {
-            return createErrorState("The AI could not understand your correction request. Please try rephrasing it or be more specific about cell locations (e.g., 'Change B5 to...').");
+        // 1. Get instructions from the missing fields filled by the user
+        const missingDataInstructions: FillInstruction[] = [];
+        for (const [key, value] of formData.entries()) {
+            if (key.startsWith('missing_') && typeof value === 'string' && value.trim() !== '') {
+                missingDataInstructions.push({
+                    targetCell: key.replace('missing_', ''),
+                    value: value
+                });
+            }
         }
         
-        const finalBuffer = await fillExcelData(fileBuffer, correctionInstructions);
+        // 2. Get instructions from the user's text correction request
+        let correctionInstructions: FillInstruction[] = [];
+        if (correctionRequest && correctionRequest.trim() !== '') {
+            const workbook = new ExcelJS.Workbook();
+            await workbook.xlsx.load(fileBuffer);
+            const worksheet = workbook.worksheets[0];
+            if (!worksheet) {
+              throw new Error("No worksheet found in the Excel file to correct.");
+            }
+            const currentSheetData: { cell: string; value: string }[] = [];
+            worksheet.eachRow({ includeEmpty: true }, (row) => {
+                row.eachCell({ includeEmpty: true }, (cell) => {
+                    if (cell.type !== 1) { 
+                        currentSheetData.push({ cell: cell.address, value: cell.text ?? '' });
+                    }
+                });
+            });
+
+            correctionInstructions = await correctFilledForm({
+                userFeedback: correctionRequest,
+                currentSheetData,
+            });
+
+            if (!correctionInstructions) {
+                 console.warn("AI returned null for correction request.");
+                 correctionInstructions = [];
+            }
+        }
+        
+        // 3. Combine all instructions
+        const allInstructions = [...missingDataInstructions, ...correctionInstructions];
+
+        if (allInstructions.length === 0) {
+            return createErrorState("You did not provide any missing data or corrections. Please describe a change or fill a missing field.");
+        }
+        
+        const finalBuffer = await fillExcelData(fileBuffer, allInstructions);
 
         return {
             status: "success",

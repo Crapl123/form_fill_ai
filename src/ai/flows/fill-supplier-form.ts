@@ -27,13 +27,22 @@ const FillSupplierFormInputSchema = z.object({
 });
 export type FillSupplierFormInput = z.infer<typeof FillSupplierFormInputSchema>;
 
-const FillSupplierFormOutputSchema = z.array(
-  z.object({
-    targetCell: z.string().describe('The cell in the supplier form that should be filled.'),
-    value: z.string().describe('The value from the vendor data to write into the target cell.'),
-    labelGuessed: z.string().optional().describe('The label from the supplier form that the AI used to determine the target cell.'),
-  })
-);
+const FillSupplierFormOutputSchema = z.object({
+  fieldsToFill: z.array(
+    z.object({
+      targetCell: z.string().describe('The cell in the supplier form that should be filled.'),
+      value: z.string().describe('The value from the vendor data to write into the target cell.'),
+      labelGuessed: z.string().optional().describe('The label from the supplier form that the AI used to determine the target cell.'),
+    })
+  ).describe("An array of fields for which the AI found corresponding data in the vendor's master sheet."),
+  fieldsToQuery: z.array(
+     z.object({
+        labelGuessed: z.string().describe("The label of the field that was identified in the supplier form."),
+        targetCell: z.string().describe("The cell location where the value for this field should be placed."),
+     })
+  ).describe("An array of fields the AI identified in the form but could not find matching data for in the vendor's master sheet.")
+});
+
 export type FillSupplierFormOutput = z.infer<typeof FillSupplierFormOutputSchema>;
 
 export async function fillSupplierForm(input: FillSupplierFormInput): Promise<FillSupplierFormOutput> {
@@ -47,39 +56,46 @@ const prompt = ai.definePrompt({
   prompt: `You are an AI assistant helping fill out a supplier registration form using data from a vendor's master data sheet.
 
 ### Context:
-- The vendor data is a structured list of fields with values (like "GST Number", "PAN", etc.)
+- The vendor data is a structured list of fields with values (like "GST Number", "PAN", etc.).
 - The supplier registration form is another Excel file with various field labels and empty cells.
 - The layout of the supplier form can vary.
 
 ---
 
 ### Your Task:
-1. Understand the meaning of the field names in the vendor data (e.g., "GST No" ≈ "GST Number").
-2. Scan the supplier registration form to identify where each vendor field should go.
-3. Find the cell next to or below each label that best matches a vendor field, and assume that is where the value should be filled.
-4. Only fill **empty cells**. Never overwrite labels or filled data.
-5. Return only values that can be confidently matched using fuzzy logic — skip anything uncertain.
+1.  Analyze the entire supplier form to identify ALL potential fields where data should be entered. A field is typically an empty cell next to or below a label.
+2.  For each field you identify, check if you can find a corresponding value in the Input Vendor Data using fuzzy matching (e.g., "GST No" ≈ "GST Number").
+3.  If you find a match, add an object to the \`fieldsToFill\` array in your response. Include the guessed label text from the form.
+4.  If you identify a field but CANNOT find a matching value in the vendor data, add an object to the \`fieldsToQuery\` array. This tells the user what information is missing.
+5.  Only fill **empty cells**. Never overwrite labels or existing data.
 
 ---
 
 ### Format Your Response:
-A JSON array like this. When you map a field, include the text from the label cell in the supplier form that you based your decision on in the "labelGuessed" field.
+A SINGLE JSON object with two keys: "fieldsToFill" and "fieldsToQuery".
+
+Example Response:
 \`\`\`json
-[
-  { "labelGuessed": "GST Number", "targetCell": "B2", "value": "27ABCDE1234F1Z5" },
-  { "labelGuessed": "PAN Number", "targetCell": "B3", "value": "ABCDE1234F" }
-]
+{
+  "fieldsToFill": [
+    { "labelGuessed": "GST Number", "targetCell": "B2", "value": "27ABCDE1234F1Z5" },
+    { "labelGuessed": "PAN Number", "targetCell": "B3", "value": "ABCDE1234F" }
+  ],
+  "fieldsToQuery": [
+    { "labelGuessed": "Company's VAT Number", "targetCell": "C5" }
+  ]
+}
 \`\`\`
-Rules:
-Use fuzzy matching to align fields like "GST No" and "GST Number", or "PAN" and "Permanent Account Number".
 
-Do not hallucinate values or make up data. Only use the provided vendor data.
+---
+### Rules:
+-   Be comprehensive: Identify all possible fields in the supplier form.
+-   Use fuzzy matching to align fields like "PAN" and "Permanent Account Number".
+-   Do not hallucinate values. Only use the provided vendor data.
+-   If no match is found for an identified field, it MUST go into the \`fieldsToQuery\` array.
+-   If no fields can be identified or filled, return an object with two empty arrays.
 
-Do not write into cells that already contain field labels or non-empty values.
-
-If no match is found for a vendor field, skip it.
-
-If multiple fields match the same label, use the most semantically correct one.
+---
 
 Input Vendor Data:
 {{#each vendorData}}
@@ -91,7 +107,7 @@ Input Supplier Form (Flattened Excel as cell-value pairs):
 - Cell: {{this.cell}}, Value: '{{this.value}}'
 {{/each}}
 
-Only return the JSON array of cell-value mappings. Do not include explanation, markdown, or formatting.
+Only return the JSON object. Do not include explanation, markdown, or formatting.
 `,
   config: {
       safetySettings: [
@@ -113,10 +129,10 @@ const fillSupplierFormFlow = ai.defineFlow(
     const { output } = await prompt(input);
     
     if (!output) {
-      // If the AI fails to produce a valid response, return an empty array.
+      // If the AI fails to produce a valid response, return an empty object.
       // This prevents crashes and indicates that no fields could be mapped.
       console.warn("AI returned a null or empty response for fillSupplierFormFlow.");
-      return [];
+      return { fieldsToFill: [], fieldsToQuery: [] };
     }
 
     return output;
