@@ -2,6 +2,7 @@
 "use server";
 
 import { correctFilledForm } from "@/ai/flows/correct-filled-form";
+import { extractFieldsFromExcel } from "@/ai/flows/extract-fields-from-excel";
 import { fillSupplierForm } from "@/ai/flows/fill-supplier-form";
 import { mapDataToPdfFields } from "@/ai/flows/map-data-to-pdf-fields";
 import { fillExcelData, FillInstruction } from "@/lib/excel-writer";
@@ -67,10 +68,12 @@ async function handleExcelProcessing(fileBuffer: Buffer, masterData: Record<stri
       throw new Error("No worksheet found in the Excel file.");
     }
     
+    // Step 1: Pre-process the Excel file into a simple textual representation for the AI.
     const supplierFormCells: { cell: string; value: string }[] = [];
     worksheet.eachRow({ includeEmpty: true }, (row) => {
       row.eachCell({ includeEmpty: true }, (cell) => {
-        if (cell.type !== 1) { 
+        // We check for cell.type !== 1 to skip slave cells of a merge. Master cells have a value.
+        if (cell.type !== ExcelJS.ValueType.Merge) { 
             supplierFormCells.push({ cell: cell.address, value: cell.text ?? '' });
         }
       });
@@ -79,15 +82,27 @@ async function handleExcelProcessing(fileBuffer: Buffer, masterData: Record<stri
     if (supplierFormCells.length === 0) {
         throw new Error("The first sheet of the Excel file appears to have no content to analyze.");
     }
+    
+    // Step 2: Use the first AI flow to extract the form's structure.
+    const formStructure = await extractFieldsFromExcel({
+        excelContent: JSON.stringify(supplierFormCells)
+    });
 
+    if (!formStructure || formStructure.length === 0) {
+        throw new Error(
+            "The AI could not identify any field labels in the supplier form. Please ensure the form is not blank and has clear labels for the fields you want to fill."
+        );
+    }
+    
+    // Step 3: Use the second AI flow to map data to the extracted structure.
     const aiResponse = await fillSupplierForm({
         vendorData,
-        supplierFormCells
+        formStructure,
     });
 
     if (!aiResponse || (!aiResponse.fieldsToFill?.length && !aiResponse.fieldsToQuery?.length)) {
         throw new Error(
-            "The AI could not identify any fields in the supplier form. Please ensure the form is not blank and has clear labels."
+            "The AI failed to map any data to the identified form fields."
         );
     }
     
@@ -146,7 +161,7 @@ async function handlePdfProcessing(fileBuffer: Buffer, masterData: Record<string
     } 
     else {
       throw new Error(
-        "The uploaded PDF is not a standard fillable form. Processing for flat (non-fillable) PDFs is not currently supported due to a library incompatibility. Please use a fillable PDF."
+        "The uploaded PDF is not a standard fillable form. Processing for flat (non-fillable) PDFs is not currently supported. Please use a fillable PDF."
       );
     }
 }
@@ -260,7 +275,7 @@ export async function applyCorrections(
             const currentSheetData: { cell: string; value: string }[] = [];
             worksheet.eachRow({ includeEmpty: true }, (row) => {
                 row.eachCell({ includeEmpty: true }, (cell) => {
-                    if (cell.type !== 1) { 
+                    if (cell.type !== ExcelJS.ValueType.Merge) { 
                         currentSheetData.push({ cell: cell.address, value: cell.text ?? '' });
                     }
                 });

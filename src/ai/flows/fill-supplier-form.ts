@@ -1,7 +1,7 @@
 
 'use server';
 /**
- * @fileOverview An AI flow that intelligently maps vendor data to a supplier form.
+ * @fileOverview An AI flow that intelligently maps vendor data to a pre-structured supplier form.
  *
  * - fillSupplierForm - A function that takes vendor data and a supplier form's structure and returns cell-value pairs for filling the form.
  * - FillSupplierFormInput - The input type for the fillSupplierForm function.
@@ -16,14 +16,14 @@ const VendorDataItemSchema = z.object({
   value: z.string().describe('The corresponding value for the field.'),
 });
 
-const SupplierFormCellSchema = z.object({
-  cell: z.string().describe('The cell address (e.g., A1, B2).'),
-  value: z.string().describe('The existing text content of the cell (can be a label or empty).'),
+const FormStructureItemSchema = z.object({
+    fieldName: z.string().describe('The name of the field as identified in the supplier form.'),
+    cellLocation: z.string().describe('The cell where the value should be placed.'),
 });
 
 const FillSupplierFormInputSchema = z.object({
   vendorData: z.array(VendorDataItemSchema).describe("A structured list of the vendor's master data."),
-  supplierFormCells: z.array(SupplierFormCellSchema).describe("A flattened structure of the supplier form to be filled."),
+  formStructure: z.array(FormStructureItemSchema).describe("A pre-analyzed structure of the supplier form, with field labels and target cell locations."),
 });
 export type FillSupplierFormInput = z.infer<typeof FillSupplierFormInputSchema>;
 
@@ -53,21 +53,17 @@ const prompt = ai.definePrompt({
   name: 'fillSupplierFormPrompt',
   input: { schema: FillSupplierFormInputSchema },
   output: {schema: FillSupplierFormOutputSchema},
-  prompt: `You are an AI assistant helping fill out a supplier registration form using data from a vendor's master data sheet.
+  prompt: `You are an AI assistant helping to map a vendor's master data to a pre-analyzed supplier form structure.
 
 ### Context:
-- The vendor data is a structured list of fields with values (like "GST Number", "PAN", etc.).
-- The supplier registration form is another Excel file with various field labels and empty cells.
-- The layout of the supplier form can vary.
-
----
+- The vendor data is a list of fields and values (e.g., "GST Number", "PAN", etc.).
+- The supplier form structure is a list of field labels that have already been identified on the form, along with the specific cell where each corresponding value should be entered.
 
 ### Your Task:
-1.  Analyze the entire supplier form to identify ALL potential fields where data should be entered. A field is typically an empty cell next to or below a label.
-2.  For each field you identify, check if you can find a corresponding value in the Input Vendor Data using fuzzy matching (e.g., "GST No" ≈ "GST Number").
-3.  If you find a match, add an object to the \`fieldsToFill\` array in your response. Include the guessed label text from the form.
-4.  If you identify a field but CANNOT find a matching value in the vendor data, add an object to the \`fieldsToQuery\` array. This tells the user what information is missing.
-5.  Only fill **empty cells**. Never overwrite labels or existing data.
+1.  For each field in the **Input Supplier Form Structure**, find the best matching field in the **Input Vendor Data**. Use fuzzy matching and semantic understanding (e.g., form field "GST No" should match vendor field "GST Number").
+2.  If you find a confident match, create an object for the \`fieldsToFill\` array. This object must contain the \`targetCell\` from the form structure and the corresponding \`value\` from the vendor data. Include the original form label in \`labelGuessed\`.
+3.  If you CANNOT find a matching value in the vendor data for a given field from the form structure, you MUST add an object to the \`fieldsToQuery\` array. This object should contain the \`labelGuessed\` (the field name from the form structure) and the \`targetCell\` from the form structure.
+4.  **CRITICAL:** Every single field from the **Input Supplier Form Structure** must result in an entry in *either* the \`fieldsToFill\` array or the \`fieldsToQuery\` array. Do not omit any fields.
 
 ---
 
@@ -78,33 +74,30 @@ Example Response:
 \`\`\`json
 {
   "fieldsToFill": [
-    { "labelGuessed": "GST Number", "targetCell": "B2", "value": "27ABCDE1234F1Z5" },
-    { "labelGuessed": "PAN Number", "targetCell": "B3", "value": "ABCDE1234F" }
+    { "labelGuessed": "GST Number", "targetCell": "B2", "value": "27ABCDE1234F1Z5" }
   ],
   "fieldsToQuery": [
     { "labelGuessed": "Company's VAT Number", "targetCell": "C5" }
   ]
 }
 \`\`\`
-
 ---
 ### Rules:
--   Be comprehensive: Identify all possible fields in the supplier form.
+-   Be comprehensive: Every field from the form structure must be accounted for.
 -   Use fuzzy matching to align fields like "PAN" and "Permanent Account Number".
 -   Do not hallucinate values. Only use the provided vendor data.
 -   If no match is found for an identified field, it MUST go into the \`fieldsToQuery\` array.
--   If no fields can be identified or filled, return an object with two empty arrays.
 
 ---
 
-Input Vendor Data:
+### Input Vendor Data:
 {{#each vendorData}}
 - {{this.fieldName}}: {{this.value}}
 {{/each}}
 
-Input Supplier Form (Flattened Excel as cell-value pairs):
-{{#each supplierFormCells}}
-- Cell: {{this.cell}}, Value: '{{this.value}}'
+### Input Supplier Form Structure:
+{{#each formStructure}}
+- Field Label: "{{this.fieldName}}", Target Cell: {{this.cellLocation}}
 {{/each}}
 
 Only return the JSON object. Do not include explanation, markdown, or formatting.
@@ -129,10 +122,15 @@ const fillSupplierFormFlow = ai.defineFlow(
     const { output } = await prompt(input);
     
     if (!output) {
-      // If the AI fails to produce a valid response, return an empty object.
-      // This prevents crashes and indicates that no fields could be mapped.
+      // If the AI fails, we must assume all fields need to be queried.
       console.warn("AI returned a null or empty response for fillSupplierFormFlow.");
-      return { fieldsToFill: [], fieldsToQuery: [] };
+      return { 
+        fieldsToFill: [], 
+        fieldsToQuery: input.formStructure.map(field => ({
+            labelGuessed: field.fieldName,
+            targetCell: field.cellLocation,
+        })) 
+      };
     }
 
     return output;

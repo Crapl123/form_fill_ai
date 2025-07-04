@@ -38,19 +38,25 @@ const prompt = ai.definePrompt({
   input: {schema: ExtractFieldsFromExcelInputSchema},
   prompt: `You are an expert at analyzing Excel spreadsheets and extracting form field definitions.
 
-I will give you the structured contents of an Excel sheet.
+I will give you the structured contents of an Excel sheet as a JSON string of cell-value pairs.
 
-Your task is to return ONLY a JSON array of objects. Each object must have exactly two keys:
-- "fieldName": the human-readable name or label of a field in the spreadsheet
-- "cellLocation": the Excel cell location (e.g., "B2") where that value is expected or filled
+Your task is to analyze the layout and identify all the human-readable labels for fields that need to be filled out. For each label, you must determine the correct cell location where the corresponding data should be entered. This is often an empty cell to the right of or below the label.
 
-⚠️ Important:
+Return ONLY a JSON array of objects. Each object must have exactly two keys:
+- "fieldName": the human-readable name or label of a field in the spreadsheet (e.g., "Company Name", "Address", "E-Mail").
+- "cellLocation": the Excel cell location (e.g., "B2", "F6") where the value for that field should be entered.
+
+⚠️ Important Rules:
 - Do NOT include any explanation, preamble, or commentary.
 - Do NOT respond with markdown, quotes, or code blocks.
-- Respond ONLY with a JSON array, exactly like this:
+- Respond ONLY with a valid JSON array.
+- If the form contains a table for multiple items (e.g., a list of contacts), identify the labels for the columns (e.g., "Name of the Person", "Designation") and associate them with the first data entry row (e.g., C18, D18).
+
+Example Response:
 [
-  { "fieldName": "Company Name", "cellLocation": "B2" },
-  { "fieldName": "Email", "cellLocation": "B3" }
+  { "fieldName": "Name of the Firm", "cellLocation": "E4" },
+  { "fieldName": "Address", "cellLocation": "E6" },
+  { "fieldName": "E-Mail", "cellLocation": "S10" }
 ]
 
 Here is the structured content:
@@ -99,32 +105,28 @@ const extractFieldsFromExcelFlow = ai.defineFlow(
     // We call the prompt which now returns a raw text response because we removed the output schema from the prompt definition
     const response = await prompt(input);
     
-    // CRITICAL FIX: The entire response object from the AI could be null if there's a fundamental API error.
     if (!response || typeof response.text !== 'string') {
-        throw new Error("AI service returned a null or empty response. This could be due to an API error, invalid credentials, or a content safety violation.");
+        throw new Error("AI service returned a null or empty response for field extraction. This could be due to an API error or content safety violation.");
     }
 
     const rawText = response.text;
 
     if (!rawText || rawText.trim() === '') {
-      throw new Error("AI returned an empty or whitespace response.");
+      throw new Error("AI returned an empty string when trying to extract fields.");
     }
 
     const cleanedJsonString = cleanAndExtractJson(rawText);
     
     try {
-      // Attempt to parse the cleaned JSON string
       const parsedJson = JSON.parse(cleanedJsonString);
-      // Further validation to ensure it's an array
       if (Array.isArray(parsedJson)) {
         return parsedJson;
       } else {
-        throw new Error(`Parsed JSON is not an array. Parsed data: ${JSON.stringify(parsedJson, null, 2)}`);
+        throw new Error(`Parsed JSON from field extraction is not an array. Parsed data: ${JSON.stringify(parsedJson, null, 2)}`);
       }
     } catch (e) {
-      // Throw a new, more descriptive error that includes the problematic text
       throw new Error(
-        `Failed to parse JSON from AI response. \n---CLEANED TEXT (attempted to parse)---\n${cleanedJsonString}\n\n---RAW RESPONSE FROM AI---\n${rawText}`
+        `Failed to parse JSON from AI field extraction response. \n---CLEANED TEXT (attempted to parse)---\n${cleanedJsonString}\n\n---RAW RESPONSE FROM AI---\n${rawText}`
       );
     }
   }
