@@ -12,6 +12,7 @@ import { PDFDocument } from "pdf-lib";
 interface PreviewData {
   cell: string;
   value: string;
+  labelGuessed?: string;
 }
 
 export interface FormState {
@@ -90,7 +91,11 @@ async function handleExcelProcessing(fileBuffer: Buffer, masterData: Record<stri
         throw new Error("The Excel writer failed to generate a valid file. The output was empty or invalid.");
     }
 
-    const previewData = fillInstructions.map(instr => ({ cell: instr.targetCell, value: instr.value }));
+    const previewData = fillInstructions.map(instr => ({
+      cell: instr.targetCell,
+      value: instr.value,
+      labelGuessed: instr.labelGuessed,
+    }));
 
     return { filledBuffer: filledExcelBuffer, previewData };
 }

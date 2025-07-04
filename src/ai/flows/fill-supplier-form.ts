@@ -31,6 +31,7 @@ const FillSupplierFormOutputSchema = z.array(
   z.object({
     targetCell: z.string().describe('The cell in the supplier form that should be filled.'),
     value: z.string().describe('The value from the vendor data to write into the target cell.'),
+    labelGuessed: z.string().optional().describe('The label from the supplier form that the AI used to determine the target cell.'),
   })
 );
 export type FillSupplierFormOutput = z.infer<typeof FillSupplierFormOutputSchema>;
@@ -62,11 +63,11 @@ const prompt = ai.definePrompt({
 ---
 
 ### Format Your Response:
-A JSON array like this:
+A JSON array like this. When you map a field, include the text from the label cell in the supplier form that you based your decision on in the "labelGuessed" field.
 \`\`\`json
 [
-  { "targetCell": "B2", "value": "27ABCDE1234F1Z5" },
-  { "targetCell": "B3", "value": "ABCDE1234F" }
+  { "labelGuessed": "GST Number", "targetCell": "B2", "value": "27ABCDE1234F1Z5" },
+  { "labelGuessed": "PAN Number", "targetCell": "B3", "value": "ABCDE1234F" }
 ]
 \`\`\`
 Rules:

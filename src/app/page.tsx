@@ -412,24 +412,37 @@ export default function Home() {
                       The AI has filled the form. Review the changes below. If anything is wrong, describe the correction and the AI will fix it.
                     </AlertDescription>
                   </Alert>
-                  <ScrollArea className="h-60 w-full rounded-md border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Cell / Field</TableHead>
-                          <TableHead>Value Filled</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {processState.previewData?.map((item) => (
-                          <TableRow key={item.cell}>
-                            <TableCell className="font-mono">{item.cell}</TableCell>
-                            <TableCell className="font-medium">{item.value}</TableCell>
+
+                  {processState.mimeType === 'application/pdf' && processState.fileData ? (
+                    <div className="rounded-md border">
+                      <iframe
+                        src={`data:application/pdf;base64,${processState.fileData}`}
+                        className="h-[600px] w-full"
+                        title="PDF Preview"
+                      />
+                    </div>
+                  ) : (
+                    <ScrollArea className="h-60 w-full rounded-md border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Guessed Label</TableHead>
+                            <TableHead>Cell Filled</TableHead>
+                            <TableHead>Value Filled</TableHead>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </ScrollArea>
+                        </TableHeader>
+                        <TableBody>
+                          {processState.previewData?.map((item) => (
+                            <TableRow key={item.cell}>
+                              <TableCell className="text-muted-foreground">{item.labelGuessed || 'N/A'}</TableCell>
+                              <TableCell className="font-mono">{item.cell}</TableCell>
+                              <TableCell className="font-medium">{item.value}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </ScrollArea>
+                  )}
                   
                   <div>
                     <h3 className="mb-2 font-semibold">Make Corrections (Optional)</h3>
