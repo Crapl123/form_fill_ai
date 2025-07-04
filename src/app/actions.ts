@@ -87,12 +87,11 @@ export async function processForm(
         const supplierFormCells: { cell: string; value: string }[] = [];
         worksheet.eachRow({ includeEmpty: true }, (row) => {
           row.eachCell({ includeEmpty: true }, (cell) => {
-            let text = '';
-            // ExcelJS.ValueType.Merge has an enum value of 1. Check for merged cells.
+            // ExcelJS.ValueType.Merge is 1. We only want to process the master cell of a merge, or regular cells.
+            // Slave cells of a merge will be skipped, preventing them from cluttering the prompt input.
             if (cell.type !== 1) { 
-                text = cell.text ?? '';
+                supplierFormCells.push({ cell: cell.address, value: cell.text ?? '' });
             }
-            supplierFormCells.push({ cell: cell.address, value: text });
           });
         });
 
