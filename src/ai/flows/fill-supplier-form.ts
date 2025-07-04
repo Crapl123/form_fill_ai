@@ -41,13 +41,7 @@ export async function fillSupplierForm(input: FillSupplierFormInput): Promise<Fi
 
 const prompt = ai.definePrompt({
   name: 'fillSupplierFormPrompt',
-  input: {
-      schema: z.object({
-        // Handlebars needs the JSON as strings, so we define them as such here.
-        VENDOR_DATA_JSON: z.string(),
-        SUPPLIER_FORM_CELLS_JSON: z.string(),
-      })
-  },
+  input: { schema: FillSupplierFormInputSchema },
   output: {schema: FillSupplierFormOutputSchema},
   prompt: `You are an AI assistant helping fill out a supplier registration form using data from a vendor's master data sheet.
 
@@ -87,10 +81,14 @@ If no match is found for a vendor field, skip it.
 If multiple fields match the same label, use the most semantically correct one.
 
 Input Vendor Data:
-{{{VENDOR_DATA_JSON}}}
+{{#each vendorData}}
+- {{this.fieldName}}: {{this.value}}
+{{/each}}
 
 Input Supplier Form (Flattened Excel as cell-value pairs):
-{{{SUPPLIER_FORM_CELLS_JSON}}}
+{{#each supplierFormCells}}
+- Cell: {{this.cell}}, Value: '{{this.value}}'
+{{/each}}
 
 Only return the JSON array of cell-value mappings. Do not include explanation, markdown, or formatting.
 `,
@@ -111,10 +109,7 @@ const fillSupplierFormFlow = ai.defineFlow(
     outputSchema: FillSupplierFormOutputSchema,
   },
   async (input) => {
-    const { output } = await prompt({
-      VENDOR_DATA_JSON: JSON.stringify(input.vendorData, null, 2),
-      SUPPLIER_FORM_CELLS_JSON: JSON.stringify(input.supplierFormCells, null, 2),
-    });
+    const { output } = await prompt(input);
     
     if (!output) {
       // If the AI fails to produce a valid response, return an empty array.

@@ -81,7 +81,7 @@ const FileUploadDropzone = ({ file, onFileChange, icon, title, description, inpu
         type="file"
         className="sr-only"
         onChange={onFileChange}
-        accept=".xlsx, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        accept=".xlsx, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, .pdf, application/pdf"
         {...props}
       />
     </label>
@@ -153,12 +153,11 @@ export default function Home() {
   const handleVendorFormFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const selectedFile = e.target.files[0];
-      if (selectedFile && selectedFile.name.endsWith(".xlsx")) {
+      const isValid = selectedFile && (selectedFile.name.endsWith(".xlsx") || selectedFile.name.endsWith(".pdf"));
+      if (isValid) {
         setVendorFormFile(selectedFile);
         setDownloadUrl(null);
-        // Reset state if a new file is uploaded
         if (state.status !== "idle") {
-           // This is a bit of a hack, we should ideally have a separate reset action
            initialState.status = "idle";
            initialState.message = "";
         }
@@ -167,7 +166,7 @@ export default function Home() {
         toast({
           variant: "destructive",
           title: "Invalid File Type",
-          description: "Please upload a valid .xlsx Excel file.",
+          description: "Please upload a valid .xlsx or .pdf file.",
         });
       }
     }
@@ -223,7 +222,7 @@ export default function Home() {
           </div>
           <CardTitle className="text-3xl font-bold">Form AutoFill AI</CardTitle>
           <CardDescription className="text-base">
-            Instantly fill any Excel form from your master data sheet in three simple steps.
+            Instantly fill any Excel or PDF form from your master data sheet.
           </CardDescription>
         </CardHeader>
 
@@ -312,7 +311,7 @@ export default function Home() {
                     onFileChange={handleVendorFormFileChange}
                     icon={<CloudUpload className="h-10 w-10 text-muted-foreground" />}
                     title="Upload Supplier Form To Fill"
-                    description="Excel files only (.xlsx)"
+                    description="Excel or PDF files only (.xlsx, .pdf)"
                     inputId="file"
                     name="file"
                     required
@@ -332,20 +331,18 @@ export default function Home() {
                     <AlertCircle className="h-4 w-4" />
                     <AlertTitle>Error</AlertTitle>
                     <AlertDescription>{state.message}</AlertDescription>
+
+                    {state.debugInfo && (
+                       <div className="mt-4">
+                          <h3 className="font-semibold mb-2">Debug Information</h3>
+                          <ScrollArea className="h-40 w-full rounded-md border p-2">
+                             <pre className="text-xs whitespace-pre-wrap"><code>{state.debugInfo}</code></pre>
+                          </ScrollArea>
+                        </div>
+                    )}
                   </Alert>
                 )}
 
-                {state.status === "error" && state.debugInfo && (
-                   <Alert variant="destructive" className="mt-4">
-                      <Terminal className="h-4 w-4" />
-                      <AlertTitle>Debug Information</AlertTitle>
-                      <AlertDescription>
-                        <ScrollArea className="h-40 w-full">
-                           <pre className="text-xs whitespace-pre-wrap"><code>{state.debugInfo}</code></pre>
-                        </ScrollArea>
-                      </AlertDescription>
-                    </Alert>
-                )}
               </CardContent>
               <CardFooter className="flex flex-col gap-4">
                 {downloadUrl ? (
