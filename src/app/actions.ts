@@ -5,9 +5,10 @@ import { correctFilledForm } from "@/ai/flows/correct-filled-form";
 import { extractFieldsFromExcel } from "@/ai/flows/extract-fields-from-excel";
 import { fillSupplierForm } from "@/ai/flows/fill-supplier-form";
 import { mapDataToPdfFields } from "@/ai/flows/map-data-to-pdf-fields";
-import { fillExcelData, FillInstruction } from "@/lib/excel-writer";
+import { createMasterDataExcel, fillExcelData, FillInstruction } from "@/lib/excel-writer";
 import ExcelJS from "exceljs";
 import { PDFDocument } from "pdf-lib";
+
 
 interface FilledField {
   cell: string;
@@ -29,6 +30,8 @@ export interface FormState {
   debugInfo?: string;
   previewData?: FilledField[];
   missingFields?: MissingField[];
+  updatedMasterData?: string | null;
+  updatedMasterDataFileName?: string;
 }
 
 function createErrorState(message: string, error?: unknown): FormState {
@@ -68,12 +71,10 @@ async function handleExcelProcessing(fileBuffer: Buffer, masterData: Record<stri
       throw new Error("No worksheet found in the Excel file.");
     }
     
-    // Step 1: Pre-process the Excel file into a simple textual representation for the AI.
     const supplierFormCells: { cell: string; value: string }[] = [];
     worksheet.eachRow({ includeEmpty: true }, (row) => {
       row.eachCell({ includeEmpty: true }, (cell) => {
-        // We check for cell.type !== 1 to skip slave cells of a merge. Master cells have a value.
-        if (cell.type !== ExcelJS.ValueType.Merge) { 
+        if (cell.type !== ExcelJS.ValueType.Merge || (cell.type === ExcelJS.ValueType.Merge && cell.value !== null)) { 
             supplierFormCells.push({ cell: cell.address, value: cell.text ?? '' });
         }
       });
@@ -83,7 +84,6 @@ async function handleExcelProcessing(fileBuffer: Buffer, masterData: Record<stri
         throw new Error("The first sheet of the Excel file appears to have no content to analyze.");
     }
     
-    // Step 2: Use the first AI flow to extract the form's structure.
     const formStructure = await extractFieldsFromExcel({
         excelContent: JSON.stringify(supplierFormCells)
     });
@@ -94,7 +94,6 @@ async function handleExcelProcessing(fileBuffer: Buffer, masterData: Record<stri
         );
     }
     
-    // Step 3: Use the second AI flow to map data to the extracted structure.
     const aiResponse = await fillSupplierForm({
         vendorData,
         formStructure,
@@ -156,7 +155,6 @@ async function handlePdfProcessing(fileBuffer: Buffer, masterData: Record<string
 
         const pdfBytes = await pdfDoc.save();
         const filledBuffer = Buffer.from(pdfBytes);
-        // "Asking for missing fields" is not yet supported for PDFs.
         return { filledBuffer, previewData, missingFields: [] };
     } 
     else {
@@ -166,8 +164,6 @@ async function handlePdfProcessing(fileBuffer: Buffer, masterData: Record<string
     }
 }
 
-
-// Main logic for the form submission - generates the initial preview
 export async function processForm(
   prevState: FormState,
   formData: FormData
@@ -225,7 +221,6 @@ export async function processForm(
     }
 }
 
-// New action to apply corrections from the preview step
 export async function applyCorrections(
   prevState: FormState,
   formData: FormData
@@ -235,6 +230,8 @@ export async function applyCorrections(
         const previousFileData = formData.get("fileData") as string;
         const fileName = formData.get("fileName") as string;
         const mimeType = formData.get("mimeType") as string;
+        const masterDataJSON = formData.get("masterData") as string;
+        const missingFieldsJSON = formData.get("missingFields") as string;
 
         if (!previousFileData) {
             return createErrorState("Could not find the previous file data. Please start over.");
@@ -251,19 +248,26 @@ export async function applyCorrections(
         }
 
         const fileBuffer = Buffer.from(previousFileData, "base64");
+        const masterData = JSON.parse(masterDataJSON || '{}') as Record<string, string>;
+        const missingFields = JSON.parse(missingFieldsJSON || '[]') as MissingField[];
+        const masterDataWithAdditions = { ...masterData };
 
-        // 1. Get instructions from the missing fields filled by the user
         const missingDataInstructions: FillInstruction[] = [];
         for (const [key, value] of formData.entries()) {
             if (key.startsWith('missing_') && typeof value === 'string' && value.trim() !== '') {
+                const targetCell = key.replace('missing_', '');
                 missingDataInstructions.push({
-                    targetCell: key.replace('missing_', ''),
+                    targetCell: targetCell,
                     value: value
                 });
+                
+                const missingField = missingFields.find(f => f.targetCell === targetCell);
+                if (missingField) {
+                    masterDataWithAdditions[missingField.labelGuessed] = value;
+                }
             }
         }
         
-        // 2. Get instructions from the user's text correction request
         let correctionInstructions: FillInstruction[] = [];
         if (correctionRequest && correctionRequest.trim() !== '') {
             const workbook = new ExcelJS.Workbook();
@@ -292,21 +296,29 @@ export async function applyCorrections(
             }
         }
         
-        // 3. Combine all instructions
         const allInstructions = [...missingDataInstructions, ...correctionInstructions];
 
         if (allInstructions.length === 0) {
-            return createErrorState("You did not provide any missing data or corrections. Please describe a change or fill a missing field.");
+            return {
+                status: "success",
+                message: "No changes were made. Your initial filled file is ready.",
+                fileData: fileBuffer.toString("base64"),
+                fileName: fileName,
+                mimeType: mimeType,
+            };
         }
         
         const finalBuffer = await fillExcelData(fileBuffer, allInstructions);
+        const updatedMasterDataBuffer = await createMasterDataExcel(masterDataWithAdditions);
 
         return {
             status: "success",
-            message: "Corrections applied! Your file is ready for download.",
+            message: "Corrections applied! Your files are ready for download.",
             fileData: finalBuffer.toString("base64"),
             fileName: `corrected-${fileName}`,
             mimeType: mimeType,
+            updatedMasterData: updatedMasterDataBuffer.toString("base64"),
+            updatedMasterDataFileName: 'updated-master-data.xlsx',
         };
 
     } catch (error) {

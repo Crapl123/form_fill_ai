@@ -46,6 +46,7 @@ import {
   FileEdit,
   RefreshCw,
   HelpCircle,
+  BookUp,
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
@@ -94,10 +95,11 @@ const FileUploadDropzone = ({ file, onFileChange, icon, title, description, inpu
   )
 }
 
-function CorrectionForm({ processState }) {
+function CorrectionForm({ processState, masterData }) {
   const { toast } = useToast();
   const [correctionState, correctionAction, isSubmittingCorrections] = useActionState(applyCorrections, initialProcessState);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const [updatedMasterDataUrl, setUpdatedMasterDataUrl] = useState<string | null>(null);
 
   const uniqueMissingFields = useMemo(() => {
     if (!processState.missingFields) return [];
@@ -119,20 +121,28 @@ function CorrectionForm({ processState }) {
     }
 
     if (correctionState.status === "success" && correctionState.fileData && correctionState.mimeType) {
-      const byteCharacters = atob(correctionState.fileData);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
-      }
-      const byteArray = new Uint8Array(byteNumbers);
-      const blob = new Blob([byteArray], { type: correctionState.mimeType });
-      const url = URL.createObjectURL(blob);
-      setDownloadUrl(url);
       toast({
         variant: "default",
-        title: "Corrections Applied!",
-        description: "Your file is ready for download.",
+        title: "Success!",
+        description: "Your files are ready for download.",
       });
+      
+      const createUrl = (fileData: string, mimeType: string) => {
+        const byteCharacters = atob(fileData);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: mimeType });
+        return URL.createObjectURL(blob);
+      }
+
+      setDownloadUrl(createUrl(correctionState.fileData, correctionState.mimeType));
+      
+      if (correctionState.updatedMasterData) {
+        setUpdatedMasterDataUrl(createUrl(correctionState.updatedMasterData, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
+      }
     }
   }, [correctionState, toast]);
 
@@ -141,6 +151,9 @@ function CorrectionForm({ processState }) {
       <input type="hidden" name="fileData" value={processState.fileData ?? ""} />
       <input type="hidden" name="fileName" value={processState.fileName ?? ""} />
       <input type="hidden" name="mimeType" value={processState.mimeType ?? ""} />
+      <input type="hidden" name="masterData" value={JSON.stringify(masterData ?? {})} />
+      <input type="hidden" name="missingFields" value={JSON.stringify(uniqueMissingFields ?? [])} />
+
       
       {uniqueMissingFields && uniqueMissingFields.length > 0 && (
           <div className="space-y-4 rounded-lg border border-yellow-500/50 bg-yellow-500/10 p-4">
@@ -187,12 +200,22 @@ function CorrectionForm({ processState }) {
 
       <div className="flex flex-col gap-2">
         {downloadUrl ? (
-          <a href={downloadUrl} download={correctionState.fileName} className="w-full">
-            <Button className="w-full" size="lg" variant="default" type="button">
-              <Download className="mr-2 h-4 w-4" />
-              Download Corrected Form
-            </Button>
-          </a>
+          <div className="flex flex-col gap-2">
+            <a href={downloadUrl} download={correctionState.fileName} className="w-full">
+              <Button className="w-full" size="lg" variant="default" type="button">
+                <Download className="mr-2 h-4 w-4" />
+                Download Corrected Form
+              </Button>
+            </a>
+            {updatedMasterDataUrl && (
+                <a href={updatedMasterDataUrl} download={correctionState.updatedMasterDataFileName} className="w-full">
+                    <Button className="w-full" size="lg" variant="secondary" type="button">
+                    <BookUp className="mr-2 h-4 w-4" />
+                    Download Updated Master Data
+                    </Button>
+                </a>
+            )}
+          </div>
         ) : (
           <Button type="submit" className="w-full" size="lg" disabled={isSubmittingCorrections}>
             {isSubmittingCorrections ? <><Loader className="mr-2 h-4 w-4 animate-spin" /> Applying Changes...</> : <><Wand2 className="mr-2 h-4 w-4" /> Apply Changes & Download</>}
@@ -234,7 +257,7 @@ export default function Home() {
       const byteArray = new Uint8Array(byteNumbers);
       const blob = new Blob([byteArray], { type: processState.mimeType });
       const url = URL.createObjectURL(blob);
-      setDirectDownloadUrl(url); // For the "Download As Is" button
+      setDirectDownloadUrl(url); 
     }
   }, [processState, toast]);
   
@@ -264,7 +287,6 @@ export default function Home() {
       if (isValid) {
         setVendorFormFile(selectedFile);
         setDirectDownloadUrl(null);
-        // Reset process state if a new file is uploaded
         if (processState.status !== 'idle') {
             (processState as any).status = 'idle';
         }
@@ -322,7 +344,6 @@ export default function Home() {
   const resetFormFill = () => {
       setVendorFormFile(null);
       setDirectDownloadUrl(null);
-      // A bit of a hack to reset the form action state
       (processState as any).status = "idle";
       (processState as any).message = "";
       (processState as any).missingFields = [];
@@ -492,7 +513,7 @@ export default function Home() {
                     </div>
                   )}
                   
-                  <CorrectionForm processState={processState} />
+                  <CorrectionForm processState={processState} masterData={masterData} />
                   
                   <CardFooter className="flex-col gap-4 px-0 pb-0 pt-4">
                     {directDownloadUrl && (
@@ -516,5 +537,3 @@ export default function Home() {
     </main>
   );
 }
-
-    
