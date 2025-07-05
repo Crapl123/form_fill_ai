@@ -8,6 +8,7 @@ import { mapDataToPdfFields } from "@/ai/flows/map-data-to-pdf-fields";
 import { createMasterDataExcel, fillExcelData, FillInstruction } from "@/lib/excel-writer";
 import ExcelJS from "exceljs";
 import { PDFDocument } from "pdf-lib";
+import { reconstructPdfWithData } from "@/ai/flows/reconstruct-pdf-with-data";
 
 
 interface FilledField {
@@ -32,6 +33,7 @@ export interface FormState {
   missingFields?: MissingField[];
   updatedMasterData?: string | null;
   updatedMasterDataFileName?: string;
+  updatedMasterDataJSON?: Record<string, string> | null;
 }
 
 function createErrorState(message: string, error?: unknown): FormState {
@@ -121,47 +123,92 @@ async function handleExcelProcessing(fileBuffer: Buffer, masterData: Record<stri
     return { filledBuffer: filledExcelBuffer, previewData, missingFields: fieldsToQuery };
 }
 
+async function handlePdfProcessing(
+  fileBuffer: Buffer,
+  masterData: Record<string, string>
+): Promise<{
+  filledBuffer: Buffer;
+  previewData: FilledField[];
+  missingFields: MissingField[];
+}> {
+  const pdfDoc = await PDFDocument.load(fileBuffer);
+  const form = pdfDoc.getForm();
+  const fields = form.getFields();
 
-async function handlePdfProcessing(fileBuffer: Buffer, masterData: Record<string, string>): Promise<{ filledBuffer: Buffer; previewData: FilledField[], missingFields: MissingField[] }> {
-    const pdfDoc = await PDFDocument.load(fileBuffer);
-    const form = pdfDoc.getForm();
-    const fields = form.getFields();
+  if (fields.length > 0) {
+    // This is a standard, fillable PDF
+    const pdfFieldNames = fields.map((field) => field.getName());
+    const vendorData = Object.entries(masterData).map(([fieldName, value]) => ({
+      fieldName,
+      value,
+    }));
 
-    if (fields.length > 0) {
-        const pdfFieldNames = fields.map(field => field.getName());
-        const vendorData = Object.entries(masterData).map(([fieldName, value]) => ({ fieldName, value }));
+    const fillInstructions = await mapDataToPdfFields({
+      vendorData,
+      pdfFieldNames,
+    });
 
-        const fillInstructions = await mapDataToPdfFields({
-            vendorData,
-            pdfFieldNames,
-        });
-        
-        if (!fillInstructions || fillInstructions.length === 0) {
-            throw new Error(
-                "This is a fillable PDF, but the AI could not map any data to its fields. Please check the PDF's field names."
-            );
-        }
-
-        const previewData = fillInstructions.map(instr => ({ cell: instr.pdfFieldName, value: instr.value }));
-
-        for (const instruction of fillInstructions) {
-            try {
-                const field = form.getField(instruction.pdfFieldName);
-                field.setText(instruction.value);
-            } catch (e) {
-                console.warn(`Could not fill PDF field '${instruction.pdfFieldName}':`, e);
-            }
-        }
-
-        const pdfBytes = await pdfDoc.save();
-        const filledBuffer = Buffer.from(pdfBytes);
-        return { filledBuffer, previewData, missingFields: [] };
-    } 
-    else {
+    if (!fillInstructions || fillInstructions.length === 0) {
       throw new Error(
-        "The uploaded PDF is not a standard fillable form. Processing for flat (non-fillable) PDFs is not currently supported. Please use a fillable PDF."
+        "This is a fillable PDF, but the AI could not map any data to its fields. Please check the PDF's field names."
       );
     }
+
+    const previewData = fillInstructions.map((instr) => ({
+      cell: instr.pdfFieldName,
+      value: instr.value,
+    }));
+
+    for (const instruction of fillInstructions) {
+      try {
+        const field = form.getField(instruction.pdfFieldName);
+        field.setText(instruction.value);
+      } catch (e) {
+        console.warn(
+          `Could not fill PDF field '${instruction.pdfFieldName}':`,
+          e
+        );
+      }
+    }
+
+    const pdfBytes = await pdfDoc.save();
+    const filledBuffer = Buffer.from(pdfBytes);
+    return { filledBuffer, previewData, missingFields: [] };
+  } else {
+    // This is a flat, non-fillable PDF. We will try to reconstruct it.
+    const pdf = require("pdf-parse");
+    const data = await pdf(fileBuffer);
+
+    if (!data || !data.text) {
+      throw new Error(
+        "Could not extract any text from the PDF. The file may be an image-only PDF."
+      );
+    }
+
+    const reconstructedText = await reconstructPdfWithData({
+      masterData,
+      pdfTextContent: data.text,
+    });
+
+    const newPdfDoc = await PDFDocument.create();
+    const page = newPdfDoc.addPage();
+    page.drawText(reconstructedText, {
+      x: 50,
+      y: page.getHeight() - 50,
+      size: 10,
+    });
+
+    const pdfBytes = await newPdfDoc.save();
+    const filledBuffer = Buffer.from(pdfBytes);
+
+    const previewData = Object.entries(masterData).map(([key, value]) => ({
+      cell: `(Reconstructed)`,
+      value,
+      labelGuessed: key,
+    }));
+
+    return { filledBuffer, previewData, missingFields: [] };
+  }
 }
 
 export async function processForm(
@@ -319,6 +366,7 @@ export async function applyCorrections(
             mimeType: mimeType,
             updatedMasterData: updatedMasterDataBuffer.toString("base64"),
             updatedMasterDataFileName: 'updated-master-data.xlsx',
+            updatedMasterDataJSON: masterDataWithAdditions
         };
 
     } catch (error) {

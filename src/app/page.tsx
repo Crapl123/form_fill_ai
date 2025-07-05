@@ -95,7 +95,7 @@ const FileUploadDropzone = ({ file, onFileChange, icon, title, description, inpu
   )
 }
 
-function CorrectionForm({ processState, masterData }) {
+function CorrectionForm({ processState, masterData, onMasterDataUpdate }) {
   const { toast } = useToast();
   const [correctionState, correctionAction, isSubmittingCorrections] = useActionState(applyCorrections, initialProcessState);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
@@ -143,8 +143,17 @@ function CorrectionForm({ processState, masterData }) {
       if (correctionState.updatedMasterData) {
         setUpdatedMasterDataUrl(createUrl(correctionState.updatedMasterData, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
       }
+
+      if (correctionState.updatedMasterDataJSON) {
+        onMasterDataUpdate(correctionState.updatedMasterDataJSON);
+        toast({
+          variant: "default",
+          title: "Master Data Updated",
+          description: "This updated data will be used for the next form you fill.",
+        });
+      }
     }
-  }, [correctionState, toast]);
+  }, [correctionState, toast, onMasterDataUpdate]);
 
   return (
     <form action={correctionAction} className="space-y-6">
@@ -513,7 +522,11 @@ export default function Home() {
                     </div>
                   )}
                   
-                  <CorrectionForm processState={processState} masterData={masterData} />
+                  <CorrectionForm 
+                    processState={processState} 
+                    masterData={masterData}
+                    onMasterDataUpdate={setMasterData}
+                  />
                   
                   <CardFooter className="flex-col gap-4 px-0 pb-0 pt-4">
                     {directDownloadUrl && (
