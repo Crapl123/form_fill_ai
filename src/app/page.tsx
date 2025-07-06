@@ -1,8 +1,10 @@
-
 "use client";
 
 import React, { useEffect, useState, useActionState, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import ExcelJS from "exceljs";
+import { useAuth } from "@/context/AuthContext";
+import { getMasterData, saveMasterData } from "@/lib/firestore";
 import {
   Card,
   CardContent,
@@ -25,12 +27,6 @@ import {
 } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
-import {
   CloudUpload,
   FileCheck,
   Loader,
@@ -47,6 +43,7 @@ import {
   RefreshCw,
   HelpCircle,
   BookUp,
+  LogOut,
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
@@ -97,6 +94,7 @@ const FileUploadDropzone = ({ file, onFileChange, icon, title, description, inpu
 
 function CorrectionForm({ processState, masterData, onMasterDataUpdate }) {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [correctionState, correctionAction, isSubmittingCorrections] = useActionState(applyCorrections, initialProcessState);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [updatedMasterDataUrl, setUpdatedMasterDataUrl] = useState<string | null>(null);
@@ -144,16 +142,17 @@ function CorrectionForm({ processState, masterData, onMasterDataUpdate }) {
         setUpdatedMasterDataUrl(createUrl(correctionState.updatedMasterData, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
       }
 
-      if (correctionState.updatedMasterDataJSON) {
+      if (correctionState.updatedMasterDataJSON && user) {
         onMasterDataUpdate(correctionState.updatedMasterDataJSON);
+        saveMasterData(user.uid, correctionState.updatedMasterDataJSON);
         toast({
           variant: "default",
           title: "Master Data Updated",
-          description: "This updated data will be used for the next form you fill.",
+          description: "Your data has been saved for future use.",
         });
       }
     }
-  }, [correctionState, toast, onMasterDataUpdate]);
+  }, [correctionState, toast, onMasterDataUpdate, user]);
 
   return (
     <form action={correctionAction} className="space-y-6">
@@ -170,7 +169,7 @@ function CorrectionForm({ processState, masterData, onMasterDataUpdate }) {
                  <HelpCircle className="h-5 w-5 text-yellow-600" />
                  <h3 className="font-semibold text-yellow-800 dark:text-yellow-300">Missing Information</h3>
               </div>
-              <p className="text-sm text-muted-foreground">The AI identified these fields in the form but couldn't find matching data in your master sheet. Please provide the values below.</p>
+              <p className="text-sm text-muted-foreground">The AI identified these fields in the form but couldn't find matching data. Please provide the values below to improve future results.</p>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 {uniqueMissingFields.map(item => (
                     <div className="space-y-2" key={item.targetCell}>
@@ -235,16 +234,131 @@ function CorrectionForm({ processState, masterData, onMasterDataUpdate }) {
   )
 }
 
-export default function Home() {
+function InitialSetup({ onSetupComplete }) {
+  const { toast } = useToast();
+  const { user } = useAuth();
+  const [masterDataFile, setMasterDataFile] = useState<File | null>(null);
+  const [parsedData, setParsedData] = useState<Record<string, string> | null>(null);
+  const [status, setStatus] = useState<"idle" | "parsing" | "saving">("idle");
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const selectedFile = e.target.files[0];
+      if (selectedFile && selectedFile.name.endsWith(".xlsx")) {
+        setMasterDataFile(selectedFile);
+        setParsedData(null);
+        setStatus("idle");
+      } else {
+        setMasterDataFile(null);
+        toast({
+          variant: "destructive",
+          title: "Invalid File Type",
+          description: "Please upload a valid .xlsx Excel file.",
+        });
+      }
+    }
+  };
+
+  const handleParse = async () => {
+    if (!masterDataFile) return;
+    setStatus('parsing');
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const buffer = await masterDataFile.arrayBuffer();
+      await workbook.xlsx.load(buffer);
+      const worksheet = workbook.worksheets[0];
+      if (!worksheet) throw new Error("No worksheet found.");
+
+      const data: Record<string, string> = {};
+      worksheet.eachRow({ includeEmpty: false }, (row) => {
+        const keyCell = row.getCell(1);
+        const valueCell = row.getCell(2);
+        const key = keyCell.text?.trim();
+        if (key) {
+          data[key] = valueCell.text?.trim() || "";
+        }
+      });
+
+      if(Object.keys(data).length === 0) {
+        throw new Error("Could not parse any data. Ensure the first column has keys and the second has values.");
+      }
+      setParsedData(data);
+      setStatus("idle");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "An unknown error occurred.";
+      setStatus('idle');
+      toast({ variant: "destructive", title: "Parsing Failed", description: message });
+    }
+  };
+
+  const handleSave = async () => {
+    if (!parsedData || !user) return;
+    setStatus('saving');
+    try {
+      await saveMasterData(user.uid, parsedData);
+      onSetupComplete(parsedData);
+      toast({ title: "Success!", description: "Your master data has been saved." });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "An unknown error occurred.";
+      setStatus('idle');
+      toast({ variant: "destructive", title: "Save Failed", description: message });
+    }
+  };
+
+  if (!parsedData) {
+    return (
+      <CardContent className="space-y-4 pt-6">
+        <Alert>
+          <Database className="h-4 w-4" />
+          <AlertTitle>Welcome! Let's get started.</AlertTitle>
+          <AlertDescription>
+            Please upload your master data sheet to begin. This is a one-time setup. The file should be an .xlsx where column A is the field name and column B is the value.
+          </AlertDescription>
+        </Alert>
+        <FileUploadDropzone
+          file={masterDataFile}
+          onFileChange={handleFileChange}
+          icon={<Database className="h-10 w-10 text-muted-foreground" />}
+          title="Upload Master Data Sheet"
+          description="Excel files only (.xlsx)"
+          inputId="master-data-upload"
+        />
+        <Button onClick={handleParse} disabled={!masterDataFile || status === 'parsing'} className="w-full" size="lg">
+          {status === 'parsing' ? <><Loader className="mr-2 h-4 w-4 animate-spin" /> Parsing...</> : "Parse & Preview"}
+        </Button>
+      </CardContent>
+    );
+  }
+
+  return (
+    <CardContent className="space-y-4 pt-6">
+       <Alert>
+          <ListChecks className="h-4 w-4" />
+          <AlertTitle>Preview Your Data</AlertTitle>
+          <AlertDescription>
+            Review the parsed data below. If it's correct, save it to complete your setup.
+          </AlertDescription>
+        </Alert>
+        <ScrollArea className="h-72 w-full rounded-md border">
+          <Table>
+            <TableHeader><TableRow><TableHead>Field Name</TableHead><TableHead>Value</TableHead></TableRow></TableHeader>
+            <TableBody>
+              {Object.entries(parsedData).map(([key, value]) => (
+                <TableRow key={key}><TableCell className="font-medium">{key}</TableCell><TableCell>{value}</TableCell></TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </ScrollArea>
+        <Button onClick={handleSave} disabled={status === 'saving'} className="w-full" size="lg">
+          {status === 'saving' ? <><Loader className="mr-2 h-4 w-4 animate-spin" /> Saving...</> : "Save and Continue"}
+        </Button>
+    </CardContent>
+  );
+}
+
+function FormFiller({ masterData, onMasterDataUpdate }) {
   const { toast } = useToast();
   const [processState, processAction, isProcessing] = useActionState(processForm, initialProcessState);
-  
-  const [currentTab, setCurrentTab] = useState("master-data");
-  
-  const [masterData, setMasterData] = useState<Record<string, string> | null>(null);
-  const [masterDataFile, setMasterDataFile] = useState<File | null>(null);
-  const [masterDataStatus, setMasterDataStatus] = useState<"idle" | "parsing" | "success" | "error">("idle");
-
   const [vendorFormFile, setVendorFormFile] = useState<File | null>(null);
   const [directDownloadUrl, setDirectDownloadUrl] = useState<string | null>(null);
 
@@ -270,25 +384,6 @@ export default function Home() {
     }
   }, [processState, toast]);
   
-  const handleMasterDataFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const selectedFile = e.target.files[0];
-      if (selectedFile && selectedFile.name.endsWith(".xlsx")) {
-        setMasterDataFile(selectedFile);
-        setMasterData(null);
-        setMasterDataStatus("idle");
-        setCurrentTab("master-data");
-      } else {
-        setMasterDataFile(null);
-        toast({
-          variant: "destructive",
-          title: "Invalid File Type",
-          description: "Please upload a valid .xlsx Excel file.",
-        });
-      }
-    }
-  };
-  
   const handleVendorFormFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const selectedFile = e.target.files[0];
@@ -297,7 +392,7 @@ export default function Home() {
         setVendorFormFile(selectedFile);
         setDirectDownloadUrl(null);
         if (processState.status !== 'idle') {
-            (processState as any).status = 'idle';
+          Object.assign(processState, initialProcessState);
         }
       } else {
         setVendorFormFile(null);
@@ -310,242 +405,194 @@ export default function Home() {
     }
   };
 
-  const handleMasterDataParse = async () => {
-    if (!masterDataFile) {
-      toast({ variant: "destructive", title: "No file selected", description: "Please select your master data file." });
-      return;
-    }
-    setMasterDataStatus('parsing');
-    try {
-      const workbook = new ExcelJS.Workbook();
-      const buffer = await masterDataFile.arrayBuffer();
-      await workbook.xlsx.load(buffer);
-      const worksheet = workbook.worksheets[0];
-      if (!worksheet) {
-        throw new Error("No worksheet found in the file.");
-      }
-      const data: Record<string, string> = {};
-      worksheet.eachRow({ includeEmpty: false }, (row) => {
-        const keyCell = row.getCell(1);
-        const valueCell = row.getCell(2);
-        const key = keyCell.text.trim();
-        if (key) {
-          data[key] = valueCell.text.trim();
-        }
-      });
-
-      if(Object.keys(data).length === 0) {
-        throw new Error("Could not parse any data. Ensure the first column has keys and the second has values.");
-      }
-
-      setMasterData(data);
-      setMasterDataStatus('success');
-      toast({ variant: "default", title: "Master data parsed!", description: "Please review your data before proceeding." });
-      setCurrentTab("preview-data");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "An unknown error occurred during parsing.";
-      setMasterDataStatus('error');
-      setMasterData(null);
-      toast({ variant: "destructive", title: "Parsing Failed", description: message });
-    }
-  };
-
   const resetFormFill = () => {
       setVendorFormFile(null);
       setDirectDownloadUrl(null);
-      (processState as any).status = "idle";
-      (processState as any).message = "";
-      (processState as any).missingFields = [];
-      (processState as any).previewData = [];
+      Object.assign(processState, initialProcessState);
+  }
+
+  if (processState.status !== 'preview') {
+    return (
+      <form action={processAction}>
+        <CardContent className="space-y-6 pt-6">
+          <input type="hidden" name="masterData" value={JSON.stringify(masterData ?? {})} />
+          <FileUploadDropzone
+              file={vendorFormFile}
+              onFileChange={handleVendorFormFileChange}
+              icon={<CloudUpload className="h-10 w-10 text-muted-foreground" />}
+              title="Upload Supplier Form To Fill"
+              description="Excel or PDF files only (.xlsx, .pdf)"
+              inputId="file"
+              name="file"
+              required
+          />
+          
+          {isProcessing && (
+            <div className="space-y-2">
+               <div className="flex items-center gap-3 text-primary">
+                  <Loader className="h-5 w-5 animate-spin text-accent" />
+                  <span className="font-medium">AI is analyzing and filling your form...</span>
+               </div>
+               <Progress value={50} className="w-full" />
+            </div>
+          )}
+          
+          {processState.status === "error" && processState.message && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Error</AlertTitle>
+              <AlertDescription>{processState.message}</AlertDescription>
+            </Alert>
+          )}
+        </CardContent>
+        <CardFooter>
+          <Button type="submit" disabled={isProcessing || !vendorFormFile} className="w-full" size="lg">
+              {isProcessing ? <><Loader className="mr-2 h-4 w-4 animate-spin" /> Processing...</> : <><Zap className="mr-2 h-4 w-4" /> Auto-Fill Form</>}
+          </Button>
+        </CardFooter>
+      </form>
+    );
+  }
+
+  return (
+    <CardContent className="space-y-4 pt-6">
+      <Alert>
+        <FileEdit className="h-4 w-4" />
+        <AlertTitle>Preview, Fill & Correct</AlertTitle>
+        <AlertDescription>
+          The AI has filled what it can. Please provide any missing information and make corrections below.
+        </AlertDescription>
+      </Alert>
+
+      {processState.mimeType === 'application/pdf' && processState.fileData ? (
+        <div className="rounded-md border">
+          <iframe
+            src={`data:application/pdf;base64,${processState.fileData}`}
+            className="h-[600px] w-full"
+            title="PDF Preview"
+          />
+        </div>
+      ) : (
+        <div>
+            <h3 className="mb-2 font-semibold">AI Auto-Filled Data</h3>
+            <ScrollArea className="h-60 w-full rounded-md border">
+            <Table>
+                <TableHeader>
+                <TableRow>
+                    <TableHead>Guessed Label</TableHead>
+                    <TableHead>Cell Filled</TableHead>
+                    <TableHead>Value Filled</TableHead>
+                </TableRow>
+                </TableHeader>
+                <TableBody>
+                {processState.previewData?.length > 0 ? processState.previewData?.map((item) => (
+                    <TableRow key={item.cell}>
+                    <TableCell className="text-muted-foreground">{item.labelGuessed || 'N/A'}</TableCell>
+                    <TableCell className="font-mono">{item.cell}</TableCell>
+                    <TableCell className="font-medium">{item.value}</TableCell>
+                    </TableRow>
+                )) : (
+                    <TableRow>
+                        <TableCell colSpan={3} className="text-center text-muted-foreground">The AI could not fill any fields automatically.</TableCell>
+                    </TableRow>
+                )}
+                </TableBody>
+            </Table>
+            </ScrollArea>
+        </div>
+      )}
+      
+      <CorrectionForm 
+        processState={processState} 
+        masterData={masterData}
+        onMasterDataUpdate={onMasterDataUpdate}
+      />
+      
+      <CardFooter className="flex-col gap-4 px-0 pb-0 pt-4">
+        {directDownloadUrl && (
+           <a href={directDownloadUrl} download={processState.fileName} className="w-full">
+             <Button className="w-full" size="lg" variant="outline">
+               <Download className="mr-2 h-4 w-4" />
+               Download Initial Filled Form
+             </Button>
+           </a>
+        )}
+         <Button variant="ghost" onClick={resetFormFill} className="w-full">
+            <RefreshCw className="mr-2 h-4 w-4"/>
+            Start Over with a new Form
+         </Button>
+      </CardFooter>
+    </CardContent>
+  );
+}
+
+export default function Home() {
+  const { user, loading: authLoading, signOut } = useAuth();
+  const router = useRouter();
+  const [masterData, setMasterData] = useState<Record<string, string> | null>(null);
+  const [loadingData, setLoadingData] = useState(true);
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push('/login');
+    }
+  }, [user, authLoading, router]);
+
+  useEffect(() => {
+    if (user) {
+      getMasterData(user.uid).then((data) => {
+        setMasterData(data);
+      }).finally(() => {
+        setLoadingData(false);
+      });
+    }
+  }, [user]);
+
+  const handleSignOut = async () => {
+    await signOut();
+    router.push('/login');
+  };
+
+  const renderContent = () => {
+    if (authLoading || loadingData) {
+      return (
+        <CardContent className="flex justify-center items-center h-64">
+          <Loader className="h-12 w-12 animate-spin text-primary" />
+        </CardContent>
+      );
+    }
+    
+    if (user && !masterData) {
+      return <InitialSetup onSetupComplete={setMasterData} />;
+    }
+
+    if (user && masterData) {
+      return <FormFiller masterData={masterData} onMasterDataUpdate={setMasterData} />;
+    }
+
+    return null;
   }
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-4 sm:p-8">
       <Card className="w-full max-w-4xl shadow-2xl">
-        <CardHeader className="text-center">
+        <CardHeader className="text-center relative">
           <div className="mx-auto bg-primary text-primary-foreground rounded-full p-3 w-fit mb-4">
             <FileSpreadsheet className="h-8 w-8" />
           </div>
           <CardTitle className="text-3xl font-bold">Form AutoFill AI</CardTitle>
           <CardDescription className="text-base">
-            Instantly fill any Excel or PDF form from your master data sheet.
+            {masterData ? 'Instantly fill any Excel or PDF form from your master data.' : 'Your personal form-filling assistant.'}
           </CardDescription>
+          {user && (
+            <div className="absolute top-4 right-4">
+              <Button variant="ghost" size="icon" onClick={handleSignOut} title="Sign Out">
+                <LogOut className="h-5 w-5" />
+              </Button>
+            </div>
+          )}
         </CardHeader>
-
-        <Tabs value={currentTab} onValueChange={setCurrentTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="master-data">Step 1: Upload</TabsTrigger>
-            <TabsTrigger value="preview-data" disabled={!masterData}>Step 2: Preview</TabsTrigger>
-            <TabsTrigger value="fill-form" disabled={!masterData}>Step 3: Fill & Correct</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="master-data">
-            <CardContent className="space-y-4 pt-6">
-              <p className="text-sm text-center text-muted-foreground">Upload an .xlsx file with your master data. The first column (A) should be the field name, and the second (B) should be the value.</p>
-              <FileUploadDropzone
-                file={masterDataFile}
-                onFileChange={handleMasterDataFileChange}
-                icon={<Database className="h-10 w-10 text-muted-foreground" />}
-                title="Upload Master Data Sheet"
-                description="Excel files only (.xlsx)"
-                inputId="master-data-upload"
-              />
-            </CardContent>
-            <CardFooter>
-              <Button onClick={handleMasterDataParse} disabled={!masterDataFile || masterDataStatus === 'parsing'} className="w-full" size="lg">
-                {masterDataStatus === 'parsing' ? <><Loader className="mr-2 h-4 w-4 animate-spin" /> Parsing...</> : "Parse & Preview"}
-              </Button>
-            </CardFooter>
-          </TabsContent>
-
-          <TabsContent value="preview-data">
-            <CardContent className="space-y-4 pt-6">
-              <Alert>
-                <ListChecks className="h-4 w-4" />
-                <AlertTitle>Preview Your Data</AlertTitle>
-                <AlertDescription>
-                  Please review the parsed master data below. If it looks correct, proceed to the next step.
-                </AlertDescription>
-              </Alert>
-              <ScrollArea className="h-72 w-full rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[40%]">Field Name</TableHead>
-                      <TableHead>Value</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {masterData && Object.entries(masterData).map(([key, value]) => (
-                      <TableRow key={key}>
-                        <TableCell className="font-medium">{key}</TableCell>
-                        <TableCell>{value}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </ScrollArea>
-            </CardContent>
-            <CardFooter>
-              <Button onClick={() => setCurrentTab("fill-form")} className="w-full" size="lg">
-                Confirm & Continue to Step 3
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </CardFooter>
-          </TabsContent>
-
-          <TabsContent value="fill-form">
-            {processState.status !== 'preview' ? (
-                <form action={processAction}>
-                  <CardContent className="space-y-6 pt-6">
-                    <input type="hidden" name="masterData" value={JSON.stringify(masterData ?? {})} />
-                    <FileUploadDropzone
-                        file={vendorFormFile}
-                        onFileChange={handleVendorFormFileChange}
-                        icon={<CloudUpload className="h-10 w-10 text-muted-foreground" />}
-                        title="Upload Supplier Form To Fill"
-                        description="Excel or PDF files only (.xlsx, .pdf)"
-                        inputId="file"
-                        name="file"
-                        required
-                    />
-                    
-                    {isProcessing && (
-                      <div className="space-y-2">
-                         <div className="flex items-center gap-3 text-primary">
-                            <Loader className="h-5 w-5 animate-spin text-accent" />
-                            <span className="font-medium">AI is analyzing and filling your form...</span>
-                         </div>
-                         <Progress value={50} className="w-full" />
-                      </div>
-                    )}
-                    
-                    {processState.status === "error" && processState.message && (
-                      <Alert variant="destructive">
-                        <AlertCircle className="h-4 w-4" />
-                        <AlertTitle>Error</AlertTitle>
-                        <AlertDescription>{processState.message}</AlertDescription>
-                      </Alert>
-                    )}
-                  </CardContent>
-                  <CardFooter>
-                    <Button type="submit" disabled={isProcessing || !vendorFormFile} className="w-full" size="lg">
-                        {isProcessing ? <><Loader className="mr-2 h-4 w-4 animate-spin" /> Processing...</> : <><Zap className="mr-2 h-4 w-4" /> Auto-Fill Form</>}
-                    </Button>
-                  </CardFooter>
-                </form>
-              ) : (
-                <CardContent className="space-y-4 pt-6">
-                  <Alert>
-                    <FileEdit className="h-4 w-4" />
-                    <AlertTitle>Preview, Fill & Correct</AlertTitle>
-                    <AlertDescription>
-                      The AI has filled what it can. Please provide any missing information and make corrections below.
-                    </AlertDescription>
-                  </Alert>
-
-                  {processState.mimeType === 'application/pdf' && processState.fileData ? (
-                    <div className="rounded-md border">
-                      <iframe
-                        src={`data:application/pdf;base64,${processState.fileData}`}
-                        className="h-[600px] w-full"
-                        title="PDF Preview"
-                      />
-                    </div>
-                  ) : (
-                    <div>
-                        <h3 className="mb-2 font-semibold">AI Auto-Filled Data</h3>
-                        <ScrollArea className="h-60 w-full rounded-md border">
-                        <Table>
-                            <TableHeader>
-                            <TableRow>
-                                <TableHead>Guessed Label</TableHead>
-                                <TableHead>Cell Filled</TableHead>
-                                <TableHead>Value Filled</TableHead>
-                            </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                            {processState.previewData?.length > 0 ? processState.previewData?.map((item) => (
-                                <TableRow key={item.cell}>
-                                <TableCell className="text-muted-foreground">{item.labelGuessed || 'N/A'}</TableCell>
-                                <TableCell className="font-mono">{item.cell}</TableCell>
-                                <TableCell className="font-medium">{item.value}</TableCell>
-                                </TableRow>
-                            )) : (
-                                <TableRow>
-                                    <TableCell colSpan={3} className="text-center text-muted-foreground">The AI could not fill any fields automatically.</TableCell>
-                                </TableRow>
-                            )}
-                            </TableBody>
-                        </Table>
-                        </ScrollArea>
-                    </div>
-                  )}
-                  
-                  <CorrectionForm 
-                    processState={processState} 
-                    masterData={masterData}
-                    onMasterDataUpdate={setMasterData}
-                  />
-                  
-                  <CardFooter className="flex-col gap-4 px-0 pb-0 pt-4">
-                    {directDownloadUrl && (
-                       <a href={directDownloadUrl} download={processState.fileName} className="w-full">
-                         <Button className="w-full" size="lg" variant="outline">
-                           <Download className="mr-2 h-4 w-4" />
-                           Download Initial Filled Form
-                         </Button>
-                       </a>
-                    )}
-                     <Button variant="ghost" onClick={resetFormFill} className="w-full">
-                        <RefreshCw className="mr-2 h-4 w-4"/>
-                        Start Over with a new Form
-                     </Button>
-                  </CardFooter>
-                </CardContent>
-            )}
-          </TabsContent>
-        </Tabs>
+        {renderContent()}
       </Card>
     </main>
   );
