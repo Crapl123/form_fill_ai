@@ -1,8 +1,38 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { getAuth, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut as firebaseSignOut, User } from 'firebase/auth';
-import { app } from '@/lib/firebase'; // Ensure you have this file
+// We keep this import so other components that use the `User` type don't break.
+import type { User } from 'firebase/auth';
+
+// This is a minimal mock user object that satisfies the User type.
+// Many fields are not needed for the app to function, so we can stub them.
+const mockUser: User = {
+    uid: 'mock-user-123',
+    displayName: 'Test User',
+    email: 'test@example.com',
+    photoURL: null,
+    providerId: 'mock',
+    emailVerified: true,
+    isAnonymous: false,
+    metadata: {},
+    providerData: [],
+    refreshToken: 'mock-token',
+    tenantId: null,
+    delete: async () => console.log('mock delete'),
+    getIdToken: async () => 'mock-id-token',
+    getIdTokenResult: async () => ({
+      token: 'mock-id-token',
+      expirationTime: '',
+      authTime: '',
+      issuedAtTime: '',
+      signInProvider: null,
+      signInSecondFactor: null,
+      claims: {},
+    }),
+    reload: async () => console.log('mock reload'),
+    toJSON: () => ({}),
+};
+
 
 const AuthContext = createContext<{
   user: User | null;
@@ -19,33 +49,35 @@ const AuthContext = createContext<{
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const auth = getAuth(app);
 
+  // Instead of using Firebase, we'll simulate a logged-in user.
+  // This lets you use the app without needing real credentials.
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setUser(user);
+    const timer = setTimeout(() => {
+      setUser(mockUser);
       setLoading(false);
-    });
+    }, 500); // Simulate network latency
 
-    return () => unsubscribe();
-  }, [auth]);
+    return () => clearTimeout(timer);
+  }, []);
+
 
   const signInWithGoogle = async () => {
-    const provider = new GoogleAuthProvider();
-    try {
-      await signInWithPopup(auth, provider);
-    } catch (error) {
-      console.error("Error signing in with Google", error);
-      throw error;
-    }
+    console.log("Mock sign-in triggered.");
+    setLoading(true);
+    setTimeout(() => {
+        setUser(mockUser);
+        setLoading(false);
+    }, 500);
   };
 
   const signOut = async () => {
-    try {
-      await firebaseSignOut(auth);
-    } catch (error) {
-      console.error("Error signing out", error);
-    }
+    console.log("Mock sign-out triggered.");
+    setLoading(true);
+     setTimeout(() => {
+        setUser(null);
+        setLoading(false);
+    }, 500);
   };
 
   return (
