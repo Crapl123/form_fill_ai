@@ -264,7 +264,8 @@ export async function processForm(
         };
 
     } catch (error) {
-        return createErrorState("A critical error occurred during the initial form filling process.", error);
+        const errorMessage = error instanceof Error ? error.message : "An unknown error occurred during processing.";
+        return createErrorState(errorMessage, error);
     }
 }
 
@@ -370,6 +371,7 @@ export async function applyCorrections(
         };
 
     } catch (error) {
-        return createErrorState("An error occurred while applying corrections.", error);
+        const errorMessage = error instanceof Error ? error.message : "An unknown error occurred while applying corrections.";
+        return createErrorState(errorMessage, error);
     }
 }
