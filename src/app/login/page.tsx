@@ -6,7 +6,8 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { FileSpreadsheet, Loader } from 'lucide-react';
+import { FileSpreadsheet, Loader, AlertCircle } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 const GoogleIcon = (props) => (
   <svg viewBox="0 0 48 48" {...props}>
@@ -21,6 +22,7 @@ export default function LoginPage() {
   const { signInWithGoogle, user, loading } = useAuth();
   const router = useRouter();
   const [isSigningIn, setIsSigningIn] = React.useState(false);
+  const [authError, setAuthError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (user) {
@@ -30,12 +32,20 @@ export default function LoginPage() {
 
   const handleGoogleSignIn = async () => {
     setIsSigningIn(true);
+    setAuthError(null);
     try {
       await signInWithGoogle();
       // On success, the useEffect above will handle the redirect.
-    } catch (error) {
+    } catch (error: any) {
+      if (error.code === 'auth/unauthorized-domain') {
+        setAuthError(
+            `This app's domain is not authorized for login. Please go to your Firebase Console -> Authentication -> Settings -> Authorized domains, and add the domain from your browser's address bar.`
+        );
+      } else {
+        setAuthError('An unexpected error occurred during sign-in. Please try again.');
+      }
       console.error("Google Sign-In failed", error);
-      setIsSigningIn(false); // Only reset on error
+      setIsSigningIn(false);
     }
   };
   
@@ -60,6 +70,13 @@ export default function LoginPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+            {authError && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Login Error</AlertTitle>
+                <AlertDescription>{authError}</AlertDescription>
+              </Alert>
+            )}
             <Button onClick={handleGoogleSignIn} className="w-full" size="lg" variant="outline" disabled={isSigningIn}>
                 {isSigningIn ? (
                     <Loader className="mr-2 h-5 w-5 animate-spin" />

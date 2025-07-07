@@ -40,18 +40,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const provider = new GoogleAuthProvider();
     try {
       await signInWithPopup(auth, provider);
-      // The onAuthStateChanged listener will handle redirecting the user upon successful login
     } catch (error) {
       console.error("Error during Google sign-in:", error);
-      // Optionally, you could use the toast component to show an error to the user
+      // Re-throw the error so the calling component can handle it
+      throw error;
     }
   };
 
   const signOut = async () => {
     try {
       await firebaseSignOut(auth);
-      // The onAuthStateChanged listener will set user to null, and the page component
-      // will handle redirecting to the login page.
     } catch (error) {
       console.error("Error during sign-out:", error);
     }
