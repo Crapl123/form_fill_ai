@@ -3,29 +3,9 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import type { User } from 'firebase/auth';
+import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut as firebaseSignOut } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
 import { useRouter } from 'next/navigation';
-
-// This is a mock implementation of Firebase Auth.
-// It simulates a logged-in user to allow development without real credentials.
-
-const mockUser: User = {
-  uid: 'mock-user-123',
-  email: 'test@example.com',
-  displayName: 'Test User',
-  photoURL: 'https://placehold.co/100x100.png',
-  emailVerified: true,
-  isAnonymous: false,
-  metadata: {},
-  providerData: [],
-  refreshToken: '',
-  tenantId: null,
-  delete: async () => {},
-  getIdToken: async () => 'mock-token',
-  getIdTokenResult: async () => ({ token: 'mock-token', claims: {}, authTime: '', issuedAtTime: '', expirationTime: '', signInProvider: null, signInSecondFactor: null }),
-  reload: async () => {},
-  toJSON: () => ({}),
-  providerId: 'mock'
-};
 
 interface AuthContextType {
   user: User | null;
@@ -44,31 +24,37 @@ const AuthContext = createContext<AuthContextType>({
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const router = useRouter();
-
+  
   useEffect(() => {
-    // On mount, simulate a user being logged in.
-    const timer = setTimeout(() => {
-      setUser(mockUser);
+    // onAuthStateChanged returns an unsubscribe function that we can use for cleanup
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setUser(user);
       setLoading(false);
-    }, 500);
-    return () => clearTimeout(timer);
+    });
+
+    // Cleanup subscription on unmount
+    return () => unsubscribe();
   }, []);
 
   const signInWithGoogle = async () => {
-    setLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
-    setUser(mockUser);
-    setLoading(false);
-    router.push('/');
+    const provider = new GoogleAuthProvider();
+    try {
+      await signInWithPopup(auth, provider);
+      // The onAuthStateChanged listener will handle redirecting the user upon successful login
+    } catch (error) {
+      console.error("Error during Google sign-in:", error);
+      // Optionally, you could use the toast component to show an error to the user
+    }
   };
 
   const signOut = async () => {
-    setLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
-    setUser(null);
-    setLoading(false);
-    router.push('/login');
+    try {
+      await firebaseSignOut(auth);
+      // The onAuthStateChanged listener will set user to null, and the page component
+      // will handle redirecting to the login page.
+    } catch (error) {
+      console.error("Error during sign-out:", error);
+    }
   };
 
   const value = { user, loading, signInWithGoogle, signOut };
