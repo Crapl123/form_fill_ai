@@ -1,3 +1,4 @@
+
 "use client";
 
 import React from 'react';
@@ -19,6 +20,7 @@ const GoogleIcon = (props) => (
 export default function LoginPage() {
   const { signInWithGoogle, user, loading } = useAuth();
   const router = useRouter();
+  const [isSigningIn, setIsSigningIn] = React.useState(false);
 
   React.useEffect(() => {
     if (user) {
@@ -27,11 +29,13 @@ export default function LoginPage() {
   }, [user, router]);
 
   const handleGoogleSignIn = async () => {
+    setIsSigningIn(true);
     try {
       await signInWithGoogle();
-      router.push('/');
+      // On success, the useEffect above will handle the redirect.
     } catch (error) {
       console.error("Google Sign-In failed", error);
+      setIsSigningIn(false); // Only reset on error
     }
   };
   
@@ -56,9 +60,13 @@ export default function LoginPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-            <Button onClick={handleGoogleSignIn} className="w-full" size="lg" variant="outline">
-                <GoogleIcon className="mr-2 h-5 w-5"/>
-                Sign In with Google
+            <Button onClick={handleGoogleSignIn} className="w-full" size="lg" variant="outline" disabled={isSigningIn}>
+                {isSigningIn ? (
+                    <Loader className="mr-2 h-5 w-5 animate-spin" />
+                ) : (
+                    <GoogleIcon className="mr-2 h-5 w-5"/>
+                )}
+                {isSigningIn ? 'Redirecting...' : 'Sign In with Google'}
             </Button>
             <p className="text-center text-xs text-muted-foreground">
                 By signing in, you agree to our terms of service.
