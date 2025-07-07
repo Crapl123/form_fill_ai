@@ -529,24 +529,32 @@ function FormFiller({ masterData, onMasterDataUpdate }) {
 export default function Home() {
   const { user, loading: authLoading, signOut } = useAuth();
   const router = useRouter();
+  const { toast } = useToast();
   const [masterData, setMasterData] = useState<Record<string, string> | null>(null);
   const [loadingData, setLoadingData] = useState(true);
 
   useEffect(() => {
-    if (!authLoading && !user) {
-      router.push('/login');
+    if (!authLoading) {
+      if (user) {
+        getMasterData(user.uid)
+          .then((data) => {
+            setMasterData(data);
+          })
+          .catch((error) => {
+            toast({
+              variant: "destructive",
+              title: "Could not load user data.",
+              description: error.message,
+            });
+          })
+          .finally(() => {
+            setLoadingData(false);
+          });
+      } else {
+        router.push("/login");
+      }
     }
-  }, [user, authLoading, router]);
-
-  useEffect(() => {
-    if (user) {
-      getMasterData(user.uid).then((data) => {
-        setMasterData(data);
-      }).finally(() => {
-        setLoadingData(false);
-      });
-    }
-  }, [user]);
+  }, [user, authLoading, router, toast]);
 
   const handleSignOut = async () => {
     await signOut();

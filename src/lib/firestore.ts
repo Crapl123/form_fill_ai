@@ -46,8 +46,11 @@ export async function getMasterData(uid: string): Promise<Record<string, string>
       console.log(`[Firestore] No document found for user ${uid}. This is expected for new users.`);
       return null;
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error getting master data from Firestore:", error);
-    throw new Error("Failed to retrieve master data.");
+    if (error.code === 'permission-denied') {
+        throw new Error("Permission Denied: Please check your Firestore security rules in the Firebase Console and ensure authenticated users can read their own data.");
+    }
+    throw new Error("Failed to retrieve master data. A network or configuration error may have occurred.");
   }
 }
