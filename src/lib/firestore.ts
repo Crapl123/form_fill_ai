@@ -10,6 +10,9 @@ let inMemoryStore: Record<string, any> = {};
  * @param data The master data object to save.
  */
 export async function saveMasterData(uid: string, data: Record<string, string>): Promise<void> {
+  // Simulate network delay
+  await new Promise(res => setTimeout(res, 300));
+
   if (!uid) {
     throw new Error("User is not authenticated. Cannot save data.");
   }
@@ -31,6 +34,9 @@ export async function saveMasterData(uid: string, data: Record<string, string>):
  * @returns The user's master data object, or null if it doesn't exist.
  */
 export async function getMasterData(uid: string): Promise<Record<string, string> | null> {
+    // Simulate network delay
+  await new Promise(res => setTimeout(res, 300));
+  
   if (!uid) {
     console.warn("No user ID provided to getMasterData.");
     return null;
@@ -44,7 +50,8 @@ export async function getMasterData(uid: string): Promise<Record<string, string>
       console.log(`[Mock Firestore] No document found for user ${uid}.`);
       return null;
     }
-  } catch (error) {
+  } catch (error)
+  {
     console.error("Error getting master data from mock Firestore:", error);
     throw new Error("Failed to retrieve master data.");
   }

@@ -3,8 +3,11 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import type { User } from 'firebase/auth';
+import { useRouter } from 'next/navigation';
 
-// Create a mock user object that matches the Firebase User type shape
+// This is a mock implementation of Firebase Auth.
+// It simulates a logged-in user to allow development without real credentials.
+
 const mockUser: User = {
   uid: 'mock-user-123',
   email: 'test@example.com',
@@ -24,12 +27,14 @@ const mockUser: User = {
   providerId: 'mock'
 };
 
-const AuthContext = createContext<{
+interface AuthContextType {
   user: User | null;
   loading: boolean;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
-}>({
+}
+
+const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
   signInWithGoogle: async () => {},
@@ -39,36 +44,46 @@ const AuthContext = createContext<{
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
   useEffect(() => {
-    // Simulate a successful login after a short delay
-    setTimeout(() => {
+    // On mount, simulate a user being logged in.
+    const timer = setTimeout(() => {
       setUser(mockUser);
       setLoading(false);
     }, 500);
+    return () => clearTimeout(timer);
   }, []);
 
   const signInWithGoogle = async () => {
     setLoading(true);
-    setTimeout(() => {
-      setUser(mockUser);
-      setLoading(false);
-    }, 500);
+    await new Promise(resolve => setTimeout(resolve, 500));
+    setUser(mockUser);
+    setLoading(false);
+    router.push('/');
   };
 
   const signOut = async () => {
     setLoading(true);
-    setTimeout(() => {
-      setUser(null);
-      setLoading(false);
-    }, 500);
+    await new Promise(resolve => setTimeout(resolve, 500));
+    setUser(null);
+    setLoading(false);
+    router.push('/login');
   };
 
+  const value = { user, loading, signInWithGoogle, signOut };
+
   return (
-    <AuthContext.Provider value={{ user, loading, signInWithGoogle, signOut }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );
 };
 
-export const useAuth = () => useContext(AuthContext);
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};
