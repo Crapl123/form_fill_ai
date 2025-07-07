@@ -8,7 +8,6 @@ import { mapDataToPdfFields } from "@/ai/flows/map-data-to-pdf-fields";
 import { createMasterDataExcel, fillExcelData, FillInstruction } from "@/lib/excel-writer";
 import ExcelJS from "exceljs";
 import { PDFDocument } from "pdf-lib";
-import { reconstructPdfWithData } from "@/ai/flows/reconstruct-pdf-with-data";
 
 
 interface FilledField {
@@ -175,39 +174,12 @@ async function handlePdfProcessing(
     const filledBuffer = Buffer.from(pdfBytes);
     return { filledBuffer, previewData, missingFields: [] };
   } else {
-    // This is a flat, non-fillable PDF. We will try to reconstruct it.
-    const pdf = require("pdf-parse");
-    const data = await pdf(fileBuffer);
-
-    if (!data || !data.text) {
-      throw new Error(
-        "Could not extract any text from the PDF. The file may be an image-only PDF."
-      );
-    }
-
-    const reconstructedText = await reconstructPdfWithData({
-      masterData,
-      pdfTextContent: data.text,
-    });
-
-    const newPdfDoc = await PDFDocument.create();
-    const page = newPdfDoc.addPage();
-    page.drawText(reconstructedText, {
-      x: 50,
-      y: page.getHeight() - 50,
-      size: 10,
-    });
-
-    const pdfBytes = await newPdfDoc.save();
-    const filledBuffer = Buffer.from(pdfBytes);
-
-    const previewData = Object.entries(masterData).map(([key, value]) => ({
-      cell: `(Reconstructed)`,
-      value,
-      labelGuessed: key,
-    }));
-
-    return { filledBuffer, previewData, missingFields: [] };
+    // This is a flat, non-fillable PDF.
+    // The library previously used for this (`pdf-parse`) is unstable and can cause server crashes.
+    // This feature is temporarily disabled to ensure application stability.
+    throw new Error(
+      "Processing for non-fillable (flat) PDFs is temporarily disabled. Please use a fillable PDF form or an Excel document."
+    );
   }
 }
 
@@ -264,7 +236,7 @@ export async function processForm(
         };
 
     } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : "An unknown error occurred during processing.";
+        const errorMessage = error instanceof Error ? error.message : "A critical error occurred during the initial form filling process.";
         return createErrorState(errorMessage, error);
     }
 }
