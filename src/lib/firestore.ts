@@ -1,10 +1,12 @@
 
-import { db } from './firebase';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+// This is a mock implementation of Firestore to allow the app to run without credentials.
+// It uses in-memory storage, so data will be lost on page refresh.
+
+let inMemoryStore: Record<string, any> = {};
 
 /**
- * Saves a user's master data to their specific document in Firestore.
- * @param uid The user's unique ID from Firebase Authentication.
+ * Saves a user's master data to the in-memory store.
+ * @param uid The user's unique ID.
  * @param data The master data object to save.
  */
 export async function saveMasterData(uid: string, data: Record<string, string>): Promise<void> {
@@ -12,19 +14,20 @@ export async function saveMasterData(uid: string, data: Record<string, string>):
     throw new Error("User is not authenticated. Cannot save data.");
   }
   try {
-    const userDocRef = doc(db, 'users', uid);
-    // This will create or overwrite the document with the new master data.
-    await setDoc(userDocRef, { masterData: data });
-    console.log(`[Firestore] Saved data for user ${uid}`);
+    if (!inMemoryStore[uid]) {
+      inMemoryStore[uid] = {};
+    }
+    inMemoryStore[uid].masterData = data;
+    console.log(`[Mock Firestore] Saved data for user ${uid}`);
   } catch (error) {
-    console.error("Error saving master data to Firestore:", error);
+    console.error("Error saving master data to mock Firestore:", error);
     throw new Error("Failed to save master data.");
   }
 }
 
 /**
- * Retrieves a user's master data from Firestore.
- * @param uid The user's unique ID from Firebase Authentication.
+ * Retrieves a user's master data from the in-memory store.
+ * @param uid The user's unique ID.
  * @returns The user's master data object, or null if it doesn't exist.
  */
 export async function getMasterData(uid: string): Promise<Record<string, string> | null> {
@@ -33,21 +36,16 @@ export async function getMasterData(uid: string): Promise<Record<string, string>
     return null;
   }
   try {
-    const userDocRef = doc(db, 'users', uid);
-    const docSnap = await getDoc(userDocRef);
-
-    if (docSnap.exists()) {
-      const data = docSnap.data();
-      console.log(`[Firestore] Found data for user ${uid}`);
-      // Return the masterData object, or null if it's missing for some reason.
-      return data.masterData || null;
+    const userData = inMemoryStore[uid];
+    if (userData && userData.masterData) {
+      console.log(`[Mock Firestore] Found data for user ${uid}`);
+      return userData.masterData;
     } else {
-      // This is a new user, so no data exists yet.
-      console.log(`[Firestore] No document found for user ${uid}. They are a new user.`);
+      console.log(`[Mock Firestore] No document found for user ${uid}.`);
       return null;
     }
   } catch (error) {
-    console.error("Error getting master data from Firestore:", error);
+    console.error("Error getting master data from mock Firestore:", error);
     throw new Error("Failed to retrieve master data.");
   }
 }

@@ -2,8 +2,27 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut as firebaseSignOut, User } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
+import type { User } from 'firebase/auth';
+
+// Create a mock user object that matches the Firebase User type shape
+const mockUser: User = {
+  uid: 'mock-user-123',
+  email: 'test@example.com',
+  displayName: 'Test User',
+  photoURL: 'https://placehold.co/100x100.png',
+  emailVerified: true,
+  isAnonymous: false,
+  metadata: {},
+  providerData: [],
+  refreshToken: '',
+  tenantId: null,
+  delete: async () => {},
+  getIdToken: async () => 'mock-token',
+  getIdTokenResult: async () => ({ token: 'mock-token', claims: {}, authTime: '', issuedAtTime: '', expirationTime: '', signInProvider: null, signInSecondFactor: null }),
+  reload: async () => {},
+  toJSON: () => ({}),
+  providerId: 'mock'
+};
 
 const AuthContext = createContext<{
   user: User | null;
@@ -22,31 +41,27 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setUser(user);
+    // Simulate a successful login after a short delay
+    setTimeout(() => {
+      setUser(mockUser);
       setLoading(false);
-    });
-
-    return () => unsubscribe();
+    }, 500);
   }, []);
 
   const signInWithGoogle = async () => {
-    const provider = new GoogleAuthProvider();
-    try {
-      await signInWithPopup(auth, provider);
-    } catch (error) {
-      console.error("Error during Google sign-in:", error);
-      throw error;
-    }
+    setLoading(true);
+    setTimeout(() => {
+      setUser(mockUser);
+      setLoading(false);
+    }, 500);
   };
 
   const signOut = async () => {
-    try {
-      await firebaseSignOut(auth);
-    } catch (error) {
-      console.error("Error during sign-out:", error);
-      throw error;
-    }
+    setLoading(true);
+    setTimeout(() => {
+      setUser(null);
+      setLoading(false);
+    }, 500);
   };
 
   return (
