@@ -18,8 +18,11 @@ export async function saveMasterData(uid: string, data: Record<string, string>):
         lastUpdated: serverTimestamp() 
     }, { merge: true });
     console.log(`[Firestore] Saved data for user ${uid}`);
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error saving master data to Firestore:", error);
+    if (error.code === 'permission-denied') {
+        throw new Error("Save Failed: Permission Denied. Please check your Firestore security rules in the Firebase Console. They should allow authenticated users to write to their own 'users/{userId}' document.");
+    }
     throw new Error("Failed to save master data.");
   }
 }
@@ -37,20 +40,18 @@ export async function getMasterData(uid: string): Promise<Record<string, string>
   try {
     const userDocRef = doc(db, 'users', uid);
     const docSnap = await getDoc(userDocRef);
-
     if (docSnap.exists()) {
-      console.log(`[Firestore] Found data for user ${uid}`);
-      // Return the masterData field, or null if it doesn't exist on the document
-      return docSnap.data().masterData || null;
+      const userData = docSnap.data();
+      return userData.masterData || null;
     } else {
-      console.log(`[Firestore] No document found for user ${uid}. This is expected for new users.`);
+      console.log(`[Firestore] No master data found for user ${uid}. This is normal for a new user.`);
       return null;
     }
   } catch (error: any) {
     console.error("Error getting master data from Firestore:", error);
     if (error.code === 'permission-denied') {
-        throw new Error("Permission Denied: Please check your Firestore security rules in the Firebase Console and ensure authenticated users can read their own data.");
+      throw new Error("Access Denied: Could not retrieve data. Please check your Firestore security rules. They must allow authenticated users to read their own '/users/{userId}' document.");
     }
-    throw new Error("Failed to retrieve master data. A network or configuration error may have occurred.");
+    throw new Error("Failed to retrieve master data.");
   }
 }
