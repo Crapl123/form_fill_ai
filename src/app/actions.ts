@@ -35,20 +35,35 @@ export interface FormState {
   updatedMasterDataJSON?: Record<string, string> | null;
 }
 
-function createErrorState(message: string, error?: unknown): FormState {
-    console.error("Error state created. Message:", message, "Raw error object:", error);
+function createErrorState(error: unknown): FormState {
+    console.error("Creating error state from raw error:", error);
     
-    let errorDetails: string;
-    
+    let message = "An unexpected error occurred on the server. Please check the logs for more details.";
+    let debugInfo: string;
+
     if (error instanceof Error) {
-        errorDetails = error.stack ? `${error.message}\n\nStack Trace:\n${error.stack}` : error.message;
+        message = error.message; // Start with the original message
+        debugInfo = error.stack || error.message;
+
+        // Add more specific, user-friendly messages for common AI/API issues
+        if (message.includes('API key not found')) {
+            message = 'The AI service failed. Please ensure your GOOGLE_API_KEY is set correctly in your .env file.';
+        } else if (message.includes('The model is overloaded')) {
+            message = 'The AI model is temporarily overloaded. Please try again in a few moments.';
+        } else if (message.includes('permission-denied') || message.includes('permission denied')) {
+            message = 'A permission error occurred. This can happen if your API key is invalid or your Firestore security rules are not configured correctly.';
+        } else if (message.includes('Unsupported file type')) {
+            message = 'The uploaded file type is not supported by the processing function.';
+        }
+
     } else if (typeof error === 'string') {
-        errorDetails = error;
+        message = error;
+        debugInfo = error;
     } else {
         try {
-            errorDetails = `A non-Error object was thrown: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
+            debugInfo = `A non-Error object was thrown: ${JSON.stringify(error, null, 2)}`;
         } catch (e) {
-            errorDetails = 'A complex, non-serializable error object was thrown. The server logs may have more details.';
+            debugInfo = 'A complex, non-serializable error object was thrown and could not be stringified.';
         }
     }
     
@@ -58,9 +73,10 @@ function createErrorState(message: string, error?: unknown): FormState {
         fileData: null,
         fileName: "",
         mimeType: "",
-        debugInfo: errorDetails,
+        debugInfo: debugInfo,
     };
 }
+
 
 async function handleExcelProcessing(fileBuffer: Buffer, masterData: Record<string, string>): Promise<{ filledBuffer: Buffer; previewData: FilledField[], missingFields: MissingField[] }> {
     const vendorData = Object.entries(masterData).map(([fieldName, value]) => ({ fieldName, value }));
@@ -190,21 +206,22 @@ export async function processForm(
     try {
         const file = formData.get("file") as File;
         if (!file || file.size === 0) {
-          return createErrorState("Please upload a valid supplier form.");
+            // This is a user error, so a simple message is fine.
+            return { ...prevState, status: "error", message: "Please upload a valid supplier form." };
         }
         
         const fileBuffer = Buffer.from(await file.arrayBuffer());
         if (fileBuffer.length === 0) {
-            return createErrorState("The uploaded file appears to be empty.");
+            return { ...prevState, status: "error", message: "The uploaded file appears to be empty." };
         }
 
         const masterDataJSON = formData.get("masterData") as string | null;
         if (!masterDataJSON) {
-          return createErrorState("Master data is missing. Please go back to Step 1.");
+          return { ...prevState, status: "error", message: "Master data is missing. Please go back to Step 1." };
         }
         const masterDataRecord = JSON.parse(masterDataJSON) as Record<string, string>;
         if (typeof masterDataRecord !== 'object' || masterDataRecord === null || Object.keys(masterDataRecord).length === 0) {
-            return createErrorState("Master data is invalid or empty. Please re-upload and parse it in Step 1.");
+            return { ...prevState, status: "error", message: "Master data is invalid or empty. Please re-upload and parse it in Step 1." };
         }
         
         let filledFileBuffer: Buffer;
@@ -222,7 +239,7 @@ export async function processForm(
             previewData = result.previewData;
             missingFields = result.missingFields;
         } else {
-            return createErrorState("Invalid file type. Please upload an .xlsx or .pdf file.");
+            return { ...prevState, status: "error", message: "Invalid file type. Please upload an .xlsx or .pdf file." };
         }
         
         return {
@@ -236,8 +253,7 @@ export async function processForm(
         };
 
     } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : "A critical error occurred during the initial form filling process.";
-        return createErrorState(errorMessage, error);
+        return createErrorState(error);
     }
 }
 
@@ -254,7 +270,7 @@ export async function applyCorrections(
         const missingFieldsJSON = formData.get("missingFields") as string;
 
         if (!previousFileData) {
-            return createErrorState("Could not find the previous file data. Please start over.");
+            return { ...prevState, status: "error", message: "Could not find the previous file data. Please start over." };
         }
         
         if (mimeType === 'application/pdf') {
@@ -343,7 +359,6 @@ export async function applyCorrections(
         };
 
     } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : "An unknown error occurred while applying corrections.";
-        return createErrorState(errorMessage, error);
+        return createErrorState(error);
     }
 }

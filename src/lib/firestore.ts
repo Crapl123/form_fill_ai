@@ -56,7 +56,7 @@ export async function getMasterData(uid: string): Promise<Record<string, string>
     
     if (error.code === 'permission-denied' || (error.message && error.message.toLowerCase().includes('permission-denied'))) {
         detailedMessage = "Access Denied: Your Firestore security rules are blocking read access. Please go to your Firebase Console -> Firestore -> Rules and ensure authenticated users can read their own '/users/{userId}' document.";
-    } else if (error.message && error.message.toLowerCase().includes('offline')) {
+    } else if (error.code === 'unavailable' || (error.message && error.message.toLowerCase().includes('offline'))) {
         detailedMessage = "Client Offline: The app can't connect to the database. Please check your internet connection and ensure both your Firestore database has been created and its security rules are correctly configured to allow access.";
     } else if (error.message && error.message.toLowerCase().includes('failed to start connection')) {
         detailedMessage = "Connection Failed: Could not connect to Firestore. Please verify your Firebase project credentials in the .env file and ensure you have created a Firestore database in your Firebase project console.";
