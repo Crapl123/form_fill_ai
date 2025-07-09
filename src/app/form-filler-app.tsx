@@ -257,6 +257,7 @@ function InitialSetup({ onSetupComplete }) {
       const selectedFile = e.target.files[0];
       const isValid = selectedFile && (selectedFile.name.endsWith(".xlsx") || selectedFile.name.endsWith(".csv"));
       if (isValid) {
+        setMasterDataFile(selectedFile);
         handleParse(selectedFile);
       } else {
         toast({
@@ -348,7 +349,7 @@ function InitialSetup({ onSetupComplete }) {
           <Database className="h-4 w-4 text-primary" />
           <AlertTitle className="text-foreground">Welcome! Let's get your data setup.</AlertTitle>
           <AlertDescription>
-            You can upload an Excel/CSV sheet with your master data, or enter it manually.
+            You can upload an Excel/CSV sheet with your master data, or enter it manually to get started.
           </AlertDescription>
         </Alert>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -360,7 +361,7 @@ function InitialSetup({ onSetupComplete }) {
             <Button variant="outline" size="lg" className="h-auto py-6 flex flex-col gap-2 border-border hover:bg-secondary hover:border-primary/50" onClick={handleStartManually}>
                 <Pencil className="h-8 w-8 text-primary"/>
                 <span className="text-foreground">Enter Data Manually</span>
-                <span className="text-xs font-normal text-muted-foreground">We'll start you with some common fields.</span>
+                <span className="text-xs font-normal text-muted-foreground">We'll take you to your profile to start.</span>
             </Button>
         </div>
       </CardContent>
@@ -388,11 +389,12 @@ function InitialSetup({ onSetupComplete }) {
 }
 
 
-function FormFiller({ masterData, onMasterDataUpdate }) {
+function FormFiller({ masterData, onMasterDataUpdate, isTrial = false }) {
   const { toast } = useToast();
   const [processState, processAction, isProcessing] = useActionState(processForm, initialProcessState);
   const [vendorFormFile, setVendorFormFile] = useState<File | null>(null);
   const [directDownloadUrl, setDirectDownloadUrl] = useState<string | null>(null);
+  const [trialUsed, setTrialUsed] = useState(false);
 
   useEffect(() => {
     if (processState.status === "error") {
@@ -404,6 +406,9 @@ function FormFiller({ masterData, onMasterDataUpdate }) {
     }
 
     if (processState.status === "preview" && processState.fileData && processState.mimeType) {
+      if (isTrial) {
+        setTrialUsed(true);
+      }
       const byteCharacters = atob(processState.fileData);
       const byteNumbers = new Array(byteCharacters.length);
       for (let i = 0; i < byteCharacters.length; i++) {
@@ -414,7 +419,7 @@ function FormFiller({ masterData, onMasterDataUpdate }) {
       const url = URL.createObjectURL(blob);
       setDirectDownloadUrl(url); 
     }
-  }, [processState, toast]);
+  }, [processState, toast, isTrial]);
   
   const handleVendorFormFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -441,6 +446,30 @@ function FormFiller({ masterData, onMasterDataUpdate }) {
       setVendorFormFile(null);
       setDirectDownloadUrl(null);
       Object.assign(processState, initialProcessState);
+  }
+
+  if (isTrial && trialUsed) {
+    return (
+        <CardContent className="text-center pt-6">
+            <Alert className="bg-primary/10 border-primary/20 text-primary">
+                <CheckCircle2 className="h-4 w-4" />
+                <AlertTitle className="text-foreground">Trial Successful!</AlertTitle>
+                <AlertDescription className="text-muted-foreground">
+                    <p>Your form has been processed. To save your master data and continue filling unlimited forms, please sign up.</p>
+                    <div className="mt-4 flex justify-center gap-2">
+                         <Link href="/login" passHref>
+                            <Button>Sign Up / Login</Button>
+                         </Link>
+                         {directDownloadUrl && (
+                             <a href={directDownloadUrl} download={processState.fileName} className="w-full">
+                                <Button variant="secondary">Download Filled Form</Button>
+                             </a>
+                         )}
+                    </div>
+                </AlertDescription>
+            </Alert>
+        </CardContent>
+    );
   }
 
   if (processState.status !== 'preview') {
@@ -567,6 +596,7 @@ export default function FormFillerApp() {
   useEffect(() => {
     if (!authLoading) {
       if (user) {
+        setLoadingData(true);
         getMasterData(user.uid)
           .then((data) => {
             setMasterData(data);
@@ -582,18 +612,20 @@ export default function FormFillerApp() {
             setLoadingData(false);
           });
       } else {
-        setLoadingData(false); // Not logged in, stop loading
+        setLoadingData(false);
+        setMasterData(null);
       }
     }
   }, [user, authLoading, toast]);
 
   const handleSignOut = async () => {
     await signOut();
-    setMasterData(null); // Clear master data on sign out
-    router.push('/'); // Stay on the landing page
+    setMasterData(null);
+    router.push('/');
   };
 
   const renderContent = () => {
+    // Show a loader while checking authentication or fetching data
     if (authLoading || (user && loadingData)) {
       return (
         <CardContent className="flex justify-center items-center h-64">
@@ -602,29 +634,20 @@ export default function FormFillerApp() {
       );
     }
     
-    // User is logged in, but has no data
+    // Logged-in user, but hasn't set up master data yet
     if (user && !masterData) {
       return <InitialSetup onSetupComplete={setMasterData} />;
     }
 
-    // User is logged in and has data
+    // Logged-in user with master data
     if (user && masterData) {
-      return <FormFiller masterData={masterData} onMasterDataUpdate={setMasterData} />;
+      return <FormFiller masterData={masterData} onMasterDataUpdate={setMasterData} isTrial={false} />;
     }
     
-    // User is not logged in, show a prompt to log in to use the app
+    // User is not logged in (guest), show the trial version.
+    // We pass empty master data and isTrial=true.
     if (!user) {
-        return (
-             <CardContent className="text-center pt-6">
-                <Alert className="bg-secondary/50 border-border text-muted-foreground">
-                    <Zap className="h-4 w-4 text-primary" />
-                    <AlertTitle className="text-foreground">Start Filling Forms</AlertTitle>
-                    <AlertDescription>
-                        <Link href="/login" className="font-bold text-primary hover:underline">Log in</Link> or <Link href="/login" className="font-bold text-primary hover:underline">sign up</Link> to save your master data and start filling forms instantly.
-                    </AlertDescription>
-                </Alert>
-            </CardContent>
-        )
+        return <FormFiller masterData={{}} onMasterDataUpdate={() => {}} isTrial={true} />;
     }
 
     return null;
@@ -658,3 +681,5 @@ export default function FormFillerApp() {
       </Card>
   );
 }
+
+    

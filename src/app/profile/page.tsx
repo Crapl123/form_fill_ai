@@ -23,12 +23,13 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Loader,
   AlertCircle,
-  Database,
   ArrowLeft,
   PlusCircle,
   Trash2,
   Save,
   Upload,
+  User,
+  Mail,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -81,11 +82,13 @@ export default function ProfilePage() {
       return;
     }
 
+    setIsLoading(true);
     getMasterData(user.uid)
       .then((data) => {
         if (data && Object.keys(data).length > 0) {
           setMasterData(data);
         } else {
+          // For new users, start with a default set of fields
           setMasterData(defaultFields);
         }
       })
@@ -201,7 +204,6 @@ export default function ProfilePage() {
         const message = error instanceof Error ? error.message : "An unknown error occurred during import.";
         toast({ variant: "destructive", title: "Import Failed", description: message });
     }
-    // Reset file input to allow re-uploading the same file
     event.target.value = '';
   };
   
@@ -257,31 +259,38 @@ export default function ProfilePage() {
     <main className="flex min-h-screen flex-col items-center justify-start p-4 sm:p-8 bg-background">
       <Card className="w-full max-w-4xl shadow-2xl bg-card border-border text-foreground">
         <CardHeader>
-          <div className="flex justify-between items-center flex-wrap gap-4">
-             <div>
-                <CardTitle className="text-3xl font-bold">Your Master Data</CardTitle>
-                <CardDescription className="text-base text-muted-foreground">
-                Add, edit, or remove fields from your master data profile.
-                </CardDescription>
-             </div>
-             <div className="flex gap-2">
-                <label htmlFor="file-upload" className="cursor-pointer">
-                    <Button asChild variant="outline" className="border-border hover:bg-secondary">
-                        <span>
-                            <Upload className="mr-2 h-4 w-4" /> Import from File
-                        </span>
-                    </Button>
-                    <Input id="file-upload" type="file" className="hidden" onChange={handleFileImport} accept=".csv, .xlsx, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"/>
-                </label>
+            <div className="flex justify-between items-start flex-wrap gap-4">
+                <div>
+                    <CardTitle className="text-3xl font-bold">Your Profile</CardTitle>
+                    <CardDescription className="text-base text-muted-foreground">
+                        Manage your user profile and master data for auto-filling forms.
+                    </CardDescription>
+                </div>
                 <Link href="/" passHref>
                     <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
                         <ArrowLeft className="mr-2 h-4 w-4" /> Back to App
                     </Button>
                 </Link>
-             </div>
-          </div>
+            </div>
+            {user && (
+                 <div className="flex flex-col sm:flex-row gap-4 sm:items-center rounded-lg bg-secondary/50 p-4 border border-border mt-4">
+                     <div className="flex items-center gap-3">
+                         <User className="h-5 w-5 text-primary"/>
+                         <span className="font-medium text-foreground">{user.displayName || 'No Name'}</span>
+                     </div>
+                      <div className="flex items-center gap-3">
+                         <Mail className="h-5 w-5 text-primary"/>
+                         <span className="font-medium text-muted-foreground">{user.email}</span>
+                     </div>
+                 </div>
+            )}
         </CardHeader>
-        <CardContent className="space-y-4">
+
+        <CardContent className="space-y-6">
+            <div>
+                 <h3 className="text-xl font-bold text-foreground mb-2">Master Data</h3>
+                 <p className="text-muted-foreground mb-4">Add, edit, or import the data fields you want to use for auto-filling.</p>
+            </div>
             {error && (
                  <Alert variant="destructive">
                     <AlertCircle className="h-4 w-4" />
@@ -290,7 +299,7 @@ export default function ProfilePage() {
                 </Alert>
             )}
             {masterData && (
-              <ScrollArea className="h-[50vh] w-full">
+              <ScrollArea className="h-[40vh] w-full">
                 <div className="space-y-4 pr-4">
                   <div className="grid grid-cols-2 md:grid-cols-[1fr_1fr_auto] items-center gap-4 px-2 pb-2 border-b border-border">
                       <Label className="text-muted-foreground">Field Name</Label>
@@ -326,12 +335,22 @@ export default function ProfilePage() {
               </ScrollArea>
             )}
         </CardContent>
-        <CardFooter className="flex justify-between items-center border-t border-border pt-6">
-           <Button variant="outline" onClick={handleAddField} className="border-border hover:bg-secondary">
-              <PlusCircle className="mr-2 h-4 w-4" />
-              Add Field
-           </Button>
-          <Button onClick={handleSaveChanges} disabled={isSaving || !masterData} className="bg-primary hover:bg-primary/90 text-primary-foreground">
+        <CardFooter className="flex flex-col sm:flex-row justify-between items-center border-t border-border pt-6 gap-4">
+           <div className="flex gap-2 w-full sm:w-auto">
+                <Button variant="outline" onClick={handleAddField} className="border-border hover:bg-secondary flex-1 sm:flex-none">
+                    <PlusCircle className="mr-2 h-4 w-4" />
+                    Add Field
+                </Button>
+                 <label htmlFor="file-upload" className="cursor-pointer flex-1 sm:flex-none">
+                    <Button asChild variant="outline" className="border-border hover:bg-secondary w-full">
+                        <span>
+                            <Upload className="mr-2 h-4 w-4" /> Import
+                        </span>
+                    </Button>
+                    <Input id="file-upload" type="file" className="hidden" onChange={handleFileImport} accept=".csv, .xlsx, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"/>
+                </label>
+           </div>
+          <Button onClick={handleSaveChanges} disabled={isSaving || !masterData} className="bg-primary hover:bg-primary/90 text-primary-foreground w-full sm:w-auto">
             {isSaving ? <Loader className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
             {isSaving ? "Saving..." : "Save Changes"}
           </Button>
@@ -340,3 +359,5 @@ export default function ProfilePage() {
     </main>
   );
 }
+
+    

@@ -13,6 +13,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useAuth } from "@/context/AuthContext";
 
 const FeatureCard = ({ icon, title, description }) => (
   <div className="flex flex-col items-start p-6 bg-card rounded-lg border border-border hover:border-primary/20 transition-colors">
@@ -56,14 +57,14 @@ const ThemeToggle = () => {
           <span className="sr-only">Toggle theme</span>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="bg-background border-border text-foreground">
-        <DropdownMenuItem onClick={() => setTheme("light")} className="hover:!bg-secondary">
+      <DropdownMenuContent align="end" className="bg-popover border-border text-popover-foreground">
+        <DropdownMenuItem onClick={() => setTheme("light")} className="hover:!bg-accent hover:!text-accent-foreground">
           Light
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme("dark")} className="hover:!bg-secondary">
+        <DropdownMenuItem onClick={() => setTheme("dark")} className="hover:!bg-accent hover:!text-accent-foreground">
           Dark
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme("system")} className="hover:!bg-secondary">
+        <DropdownMenuItem onClick={() => setTheme("system")} className="hover:!bg-accent hover:!text-accent-foreground">
           System
         </DropdownMenuItem>
       </DropdownMenuContent>
@@ -72,6 +73,8 @@ const ThemeToggle = () => {
 }
 
 export default function LandingPage() {
+  const { user } = useAuth();
+
   return (
     <main className="bg-background text-foreground font-body antialiased">
       {/* Header */}
@@ -83,14 +86,18 @@ export default function LandingPage() {
           </div>
           <div className="flex items-center gap-2">
             <ThemeToggle />
-            <Link href="/login" passHref>
-              <Button variant="ghost" className="text-muted-foreground hover:text-foreground hover:bg-secondary">Login</Button>
-            </Link>
-            <Link href="/login" passHref>
-              <Button variant="default" className="bg-primary text-primary-foreground hover:bg-primary/90">
-                Sign Up <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
+            {!user && (
+              <>
+                <Link href="/login" passHref>
+                  <Button variant="ghost" className="text-muted-foreground hover:text-foreground hover:bg-secondary">Login</Button>
+                </Link>
+                <Link href="/login" passHref>
+                  <Button variant="default" className="bg-primary text-primary-foreground hover:bg-primary/90">
+                    Sign Up <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </header>
@@ -215,3 +222,5 @@ export default function LandingPage() {
     </main>
   );
 }
+
+    
