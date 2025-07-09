@@ -632,7 +632,7 @@ export default function Home() {
           </div>
           <CardTitle className="text-3xl font-bold">Form AutoFill AI</CardTitle>
           <CardDescription className="text-base max-w-2xl mx-auto">
-            Auto-fill any form — Excel or PDF — using your saved master data. Works with invoices, onboarding forms, registrations, and more.
+            Auto-fill any form - Excel or PDF - using your saved master data. Works with invoices, onboarding forms, registrations, and more.
           </CardDescription>
           {user && (
             <div className="absolute top-4 right-4 flex items-center gap-2">

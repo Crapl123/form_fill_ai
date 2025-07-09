@@ -5,7 +5,7 @@ import { AuthProvider } from '@/context/AuthContext';
 
 export const metadata: Metadata = {
   title: 'Form AutoFill AI',
-  description: 'Auto-fill any form — Excel or PDF — using your saved master data. Works with invoices, onboarding forms, registrations, and more.',
+  description: 'Auto-fill any form - Excel or PDF - using your saved master data. Works with invoices, onboarding forms, registrations, and more.',
 };
 
 export default function RootLayout({
