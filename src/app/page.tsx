@@ -3,9 +3,16 @@
 
 import React from "react";
 import Link from "next/link";
-import { ArrowRight, Bot, Feather, FileCheck, FileText, Lock, Users, Zap } from "lucide-react";
+import { ArrowRight, Bot, Feather, FileCheck, FileText, Lock, Moon, Sun, Users, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import FormFillerApp from "@/app/form-filler-app";
+import { useTheme } from "next-themes";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const FeatureCard = ({ icon, title, description }) => (
   <div className="flex flex-col items-start p-6 bg-slate-800/50 rounded-lg border border-slate-700/50 hover:border-slate-600 transition-colors">
@@ -37,6 +44,33 @@ const TestimonialCard = ({ quote, author, role }) => (
     </div>
 )
 
+const ThemeToggle = () => {
+  const { setTheme } = useTheme();
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" className="text-slate-300 hover:text-white hover:bg-slate-800">
+          <Sun className="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+          <Moon className="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+          <span className="sr-only">Toggle theme</span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="bg-slate-800/80 backdrop-blur border-slate-700 text-slate-300">
+        <DropdownMenuItem onClick={() => setTheme("light")} className="hover:!bg-slate-700">
+          Light
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setTheme("dark")} className="hover:!bg-slate-700">
+          Dark
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setTheme("system")} className="hover:!bg-slate-700">
+          System
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 export default function LandingPage() {
   return (
     <main className="bg-slate-900 text-slate-300 font-body antialiased">
@@ -48,6 +82,7 @@ export default function LandingPage() {
             <span className="font-bold text-xl text-white">Form AutoFill AI</span>
           </div>
           <div className="flex items-center gap-2">
+            <ThemeToggle />
             <Link href="/login" passHref>
               <Button variant="ghost" className="text-slate-300 hover:text-white hover:bg-slate-800">Login</Button>
             </Link>
