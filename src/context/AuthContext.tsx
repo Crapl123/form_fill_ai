@@ -5,7 +5,6 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import type { User } from 'firebase/auth';
 import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut as firebaseSignOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
-import { useRouter } from 'next/navigation';
 
 interface AuthContextType {
   user: User | null;
@@ -24,7 +23,6 @@ const AuthContext = createContext<AuthContextType>({
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const router = useRouter();
   
   useEffect(() => {
     // onAuthStateChanged returns an unsubscribe function that we can use for cleanup
@@ -41,10 +39,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const provider = new GoogleAuthProvider();
     try {
       await signInWithPopup(auth, provider);
-      // After a successful sign-in, the onAuthStateChanged listener will update the user state.
-      // We can then redirect from the login page or rely on the effect in login page.
-      // For a more robust flow, we can handle the redirect here if needed, but often it's cleaner on the page.
-      // Let's keep the redirect logic in the login page's useEffect for now as it's a common pattern.
+      // The onAuthStateChanged listener will handle setting the user state.
+      // We no longer need to handle redirects here; the login page will do it.
     } catch (error) {
       console.error("Error during Google sign-in:", error);
       // Re-throw the error so the calling component can handle it
