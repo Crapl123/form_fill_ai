@@ -20,10 +20,12 @@ export async function saveMasterData(uid: string, data: Record<string, string>):
     console.log(`[Firestore] Saved data for user ${uid}`);
   } catch (error: any) {
     console.error("Error saving master data to Firestore:", error);
-    if (error.code === 'permission-denied') {
-        throw new Error("Save Failed: Permission Denied. Please check your Firestore security rules in the Firebase Console. They should allow authenticated users to write to their own 'users/{userId}' document.");
+    let detailedMessage = "Failed to save master data. This can happen if the client is offline or if there's a configuration issue.";
+    
+    if (error.code === 'permission-denied' || (error.message && error.message.toLowerCase().includes('permission-denied'))) {
+        detailedMessage = "Save Failed: Permission Denied. Your Firestore security rules are blocking write access. Please go to your Firebase Console -> Firestore -> Rules and ensure authenticated users can write to their own 'users/{userId}' document.";
     }
-    throw new Error("Failed to save master data.");
+    throw new Error(detailedMessage);
   }
 }
 
@@ -49,9 +51,17 @@ export async function getMasterData(uid: string): Promise<Record<string, string>
     }
   } catch (error: any) {
     console.error("Error getting master data from Firestore:", error);
-    if (error.code === 'permission-denied') {
-      throw new Error("Access Denied: Could not retrieve data. Please check your Firestore security rules. They must allow authenticated users to read their own '/users/{userId}' document.");
+
+    let detailedMessage = "Failed to retrieve master data.";
+    
+    if (error.code === 'permission-denied' || (error.message && error.message.toLowerCase().includes('permission-denied'))) {
+        detailedMessage = "Access Denied: Your Firestore security rules are blocking read access. Please go to your Firebase Console -> Firestore -> Rules and ensure authenticated users can read their own '/users/{userId}' document.";
+    } else if (error.message && error.message.toLowerCase().includes('offline')) {
+        detailedMessage = "Client Offline: The app can't connect to the database. Please check your internet connection and ensure both your Firestore database has been created and its security rules are correctly configured to allow access.";
+    } else if (error.message && error.message.toLowerCase().includes('failed to start connection')) {
+        detailedMessage = "Connection Failed: Could not connect to Firestore. Please verify your Firebase project credentials in the .env file and ensure you have created a Firestore database in your Firebase project console.";
     }
-    throw new Error("Failed to retrieve master data.");
+
+    throw new Error(detailedMessage);
   }
 }
