@@ -4,8 +4,8 @@ import { Toaster } from "@/components/ui/toaster"
 import { AuthProvider } from '@/context/AuthContext';
 
 export const metadata: Metadata = {
-  title: 'Form AutoFill',
-  description: 'Auto-fill Excel forms using AI',
+  title: 'Form AutoFill AI',
+  description: 'Auto-fill any form — Excel or PDF — using your saved master data. Works with invoices, onboarding forms, registrations, and more.',
 };
 
 export default function RootLayout({

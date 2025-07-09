@@ -48,6 +48,7 @@ import {
   LogOut,
   User as UserIcon,
   Pencil,
+  ArrowLeft,
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
@@ -65,7 +66,7 @@ const initialProcessState: FormState = {
   missingFields: [],
 };
 
-const FileUploadDropzone = ({ file, onFileChange, icon, title, description, inputId, ...props }) => {
+const FileUploadDropzone = ({ file, onFileChange, icon, title, description, inputId, accept, ...props }) => {
   return (
     <label htmlFor={inputId} className="cursor-pointer">
       <div className="flex flex-col items-center justify-center space-y-2 rounded-lg border-2 border-dashed p-10 text-center transition hover:border-primary">
@@ -89,14 +90,14 @@ const FileUploadDropzone = ({ file, onFileChange, icon, title, description, inpu
         type="file"
         className="sr-only"
         onChange={onFileChange}
-        accept=".xlsx, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, .pdf, application/pdf"
+        accept={accept}
         {...props}
       />
     </label>
   )
 }
 
-function CorrectionForm({ processState, masterData, onMasterDataUpdate }) {
+function CorrectionForm({ processState, masterData, onMasterDataUpdate, onBack }) {
   const { toast } = useToast();
   const { user } = useAuth();
   const [correctionState, correctionAction, isSubmittingCorrections] = useActionState(applyCorrections, initialProcessState);
@@ -234,6 +235,11 @@ function CorrectionForm({ processState, masterData, onMasterDataUpdate }) {
           </Button>
         )}
       </div>
+
+       <Button variant="outline" onClick={onBack} className="w-full">
+          <ArrowLeft className="mr-2 h-4 w-4"/>
+          Back to Upload
+       </Button>
     </form>
   )
 }
@@ -248,39 +254,76 @@ function InitialSetup({ onSetupComplete }) {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const selectedFile = e.target.files[0];
-      if (selectedFile && selectedFile.name.endsWith(".xlsx")) {
+      const isValid = selectedFile && (selectedFile.name.endsWith(".xlsx") || selectedFile.name.endsWith(".csv"));
+      if (isValid) {
         handleParse(selectedFile);
       } else {
         toast({
           variant: "destructive",
           title: "Invalid File Type",
-          description: "Please upload a valid .xlsx Excel file.",
+          description: "Please upload a valid .xlsx or .csv file.",
         });
       }
     }
   };
+  
+  const parseCsv = (file: File): Promise<Record<string, string>> => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const text = event.target?.result as string;
+            const data: Record<string, string> = {};
+            const rows = text.split(/\r?\n/);
+            rows.forEach(row => {
+                const columns = row.split(',');
+                if (columns.length >= 2) {
+                    const key = columns[0].trim();
+                    const value = columns.slice(1).join(',').trim();
+                    if(key) data[key] = value;
+                }
+            });
+            if(Object.keys(data).length === 0) {
+              reject(new Error("Could not parse any data. Ensure the CSV has at least two columns: key, value."));
+            } else {
+              resolve(data);
+            }
+        };
+        reader.onerror = () => reject(new Error("Failed to read file."));
+        reader.readAsText(file);
+    });
+  }
+  
+  const parseXlsx = async (file: File): Promise<Record<string, string>> => {
+    const workbook = new ExcelJS.Workbook();
+    const buffer = await file.arrayBuffer();
+    await workbook.xlsx.load(buffer);
+    const worksheet = workbook.worksheets[0];
+    if (!worksheet) throw new Error("No worksheet found.");
+
+    const data: Record<string, string> = {};
+    worksheet.eachRow({ includeEmpty: false }, (row) => {
+      const keyCell = row.getCell(1);
+      const valueCell = row.getCell(2);
+      const key = keyCell.text?.trim();
+      if (key) {
+        data[key] = valueCell.text?.trim() || "";
+      }
+    });
+
+    if(Object.keys(data).length === 0) {
+      throw new Error("Could not parse any data. Ensure the first column has keys and the second has values.");
+    }
+    return data;
+  }
 
   const handleParse = async (file: File) => {
     if (!file || !user) return;
     try {
-      const workbook = new ExcelJS.Workbook();
-      const buffer = await file.arrayBuffer();
-      await workbook.xlsx.load(buffer);
-      const worksheet = workbook.worksheets[0];
-      if (!worksheet) throw new Error("No worksheet found.");
-
-      const data: Record<string, string> = {};
-      worksheet.eachRow({ includeEmpty: false }, (row) => {
-        const keyCell = row.getCell(1);
-        const valueCell = row.getCell(2);
-        const key = keyCell.text?.trim();
-        if (key) {
-          data[key] = valueCell.text?.trim() || "";
-        }
-      });
-
-      if(Object.keys(data).length === 0) {
-        throw new Error("Could not parse any data. Ensure the first column has keys and the second has values.");
+      let data: Record<string, string>;
+      if (file.name.endsWith('.csv')) {
+          data = await parseCsv(file);
+      } else {
+          data = await parseXlsx(file);
       }
       
       await saveMasterData(user.uid, data);
@@ -304,16 +347,16 @@ function InitialSetup({ onSetupComplete }) {
           <Database className="h-4 w-4" />
           <AlertTitle>Welcome! Let's get your data setup.</AlertTitle>
           <AlertDescription>
-            You can upload an Excel sheet with your master data, or enter it manually.
+            You can upload an Excel/CSV sheet with your master data, or enter it manually.
           </AlertDescription>
         </Alert>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Button variant="outline" size="lg" className="h-auto py-6 flex flex-col gap-2" onClick={() => setSetupMode('upload')}>
+            <Button variant="outline" size="lg" className="h-auto py-6 flex flex-col gap-2 hover:bg-accent/50" onClick={() => setSetupMode('upload')}>
                 <CloudUpload className="h-8 w-8"/>
                 <span>Upload Master Sheet</span>
-                <span className="text-xs font-normal text-muted-foreground">(.xlsx file, Column A: Fields, Column B: Values)</span>
+                <span className="text-xs font-normal text-muted-foreground">(.xlsx or .csv)</span>
             </Button>
-            <Button variant="outline" size="lg" className="h-auto py-6 flex flex-col gap-2" onClick={handleStartManually}>
+            <Button variant="outline" size="lg" className="h-auto py-6 flex flex-col gap-2 hover:bg-accent/50" onClick={handleStartManually}>
                 <Pencil className="h-8 w-8"/>
                 <span>Enter Data Manually</span>
                 <span className="text-xs font-normal text-muted-foreground">We'll start you with some common fields.</span>
@@ -331,8 +374,9 @@ function InitialSetup({ onSetupComplete }) {
           onFileChange={handleFileChange}
           icon={<Database className="h-10 w-10 text-muted-foreground" />}
           title="Upload Master Data Sheet"
-          description="Excel files only (.xlsx)"
+          description="Excel (.xlsx) or CSV (.csv) files only"
           inputId="master-data-upload"
+          accept=".xlsx, .csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, text/csv"
         />
         <Button onClick={() => setSetupMode('choice')} variant="link">Back to options</Button>
       </CardContent>
@@ -407,11 +451,12 @@ function FormFiller({ masterData, onMasterDataUpdate }) {
               file={vendorFormFile}
               onFileChange={handleVendorFormFileChange}
               icon={<CloudUpload className="h-10 w-10 text-muted-foreground" />}
-              title="Upload Supplier Form To Fill"
+              title="Upload Form To Fill"
               description="Excel or PDF files only (.xlsx, .pdf)"
               inputId="file"
               name="file"
               required
+              accept=".xlsx, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, .pdf, application/pdf"
           />
           
           {isProcessing && (
@@ -493,6 +538,7 @@ function FormFiller({ masterData, onMasterDataUpdate }) {
         processState={processState} 
         masterData={masterData}
         onMasterDataUpdate={onMasterDataUpdate}
+        onBack={resetFormFill}
       />
       
       <CardFooter className="flex-col gap-4 px-0 pb-0 pt-4">
@@ -504,14 +550,23 @@ function FormFiller({ masterData, onMasterDataUpdate }) {
              </Button>
            </a>
         )}
-         <Button variant="ghost" onClick={resetFormFill} className="w-full">
-            <RefreshCw className="mr-2 h-4 w-4"/>
-            Start Over with a new Form
-         </Button>
       </CardFooter>
     </CardContent>
   );
 }
+
+const HowItWorksStep = ({ icon, title, description }) => {
+    return (
+        <div className="flex flex-col items-center text-center">
+            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+                {icon}
+            </div>
+            <h3 className="font-semibold text-lg">{title}</h3>
+            <p className="text-muted-foreground text-sm">{description}</p>
+        </div>
+    );
+};
+
 
 export default function Home() {
   const { user, loading: authLoading, signOut } = useAuth();
@@ -569,15 +624,15 @@ export default function Home() {
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-4 sm:p-8">
+    <main className="flex min-h-screen flex-col items-center justify-center p-4 sm:p-8 bg-background">
       <Card className="w-full max-w-4xl shadow-2xl">
         <CardHeader className="text-center relative">
           <div className="mx-auto bg-primary text-primary-foreground rounded-full p-3 w-fit mb-4">
-            <FileSpreadsheet className="h-8 w-8" />
+            <Wand2 className="h-8 w-8" />
           </div>
           <CardTitle className="text-3xl font-bold">Form AutoFill AI</CardTitle>
-          <CardDescription className="text-base">
-            {masterData ? 'Instantly fill any Excel or PDF form from your master data.' : 'Your personal form-filling assistant.'}
+          <CardDescription className="text-base max-w-2xl mx-auto">
+            Auto-fill any form — Excel or PDF — using your saved master data. Works with invoices, onboarding forms, registrations, and more.
           </CardDescription>
           {user && (
             <div className="absolute top-4 right-4 flex items-center gap-2">
@@ -592,10 +647,22 @@ export default function Home() {
             </div>
           )}
         </CardHeader>
+        
+        {masterData && (
+          <CardContent>
+            <div className="my-6 rounded-lg border bg-card p-6">
+                <h2 className="text-xl font-semibold text-center mb-6">How It Works</h2>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    <HowItWorksStep icon={<Pencil className="h-6 w-6"/>} title="1. Set Your Data" description="Enter or upload your master data just once on your profile." />
+                    <HowItWorksStep icon={<CloudUpload className="h-6 w-6"/>} title="2. Upload a Form" description="Upload any structured form (Excel or PDF)." />
+                    <HowItWorksStep icon={<FileCheck className="h-6 w-6"/>} title="3. Download" description="Review, correct, and download the auto-filled version instantly." />
+                </div>
+            </div>
+          </CardContent>
+        )}
+        
         {renderContent()}
       </Card>
     </main>
   );
 }
-
-    
