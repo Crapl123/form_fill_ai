@@ -1,7 +1,9 @@
+
 "use client";
 
 import React, { useEffect, useState, useActionState, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import ExcelJS from "exceljs";
 import { useAuth } from "@/context/AuthContext";
 import { getMasterData, saveMasterData } from "@/lib/firestore";
@@ -44,6 +46,8 @@ import {
   HelpCircle,
   BookUp,
   LogOut,
+  User as UserIcon,
+  Pencil,
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
@@ -237,19 +241,16 @@ function CorrectionForm({ processState, masterData, onMasterDataUpdate }) {
 function InitialSetup({ onSetupComplete }) {
   const { toast } = useToast();
   const { user } = useAuth();
+  const router = useRouter();
+  const [setupMode, setSetupMode] = useState<"choice" | "upload" | "manual">("choice");
   const [masterDataFile, setMasterDataFile] = useState<File | null>(null);
-  const [parsedData, setParsedData] = useState<Record<string, string> | null>(null);
-  const [status, setStatus] = useState<"idle" | "parsing" | "saving">("idle");
-
+  
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const selectedFile = e.target.files[0];
       if (selectedFile && selectedFile.name.endsWith(".xlsx")) {
-        setMasterDataFile(selectedFile);
-        setParsedData(null);
-        setStatus("idle");
+        handleParse(selectedFile);
       } else {
-        setMasterDataFile(null);
         toast({
           variant: "destructive",
           title: "Invalid File Type",
@@ -259,12 +260,11 @@ function InitialSetup({ onSetupComplete }) {
     }
   };
 
-  const handleParse = async () => {
-    if (!masterDataFile) return;
-    setStatus('parsing');
+  const handleParse = async (file: File) => {
+    if (!file || !user) return;
     try {
       const workbook = new ExcelJS.Workbook();
-      const buffer = await masterDataFile.arrayBuffer();
+      const buffer = await file.arrayBuffer();
       await workbook.xlsx.load(buffer);
       const worksheet = workbook.worksheets[0];
       if (!worksheet) throw new Error("No worksheet found.");
@@ -282,39 +282,50 @@ function InitialSetup({ onSetupComplete }) {
       if(Object.keys(data).length === 0) {
         throw new Error("Could not parse any data. Ensure the first column has keys and the second has values.");
       }
-      setParsedData(data);
-      setStatus("idle");
+      
+      await saveMasterData(user.uid, data);
+      onSetupComplete(data);
+      toast({ title: "Success!", description: "Your master data has been saved from the sheet." });
+
     } catch (error) {
       const message = error instanceof Error ? error.message : "An unknown error occurred.";
-      setStatus('idle');
       toast({ variant: "destructive", title: "Parsing Failed", description: message });
     }
   };
-
-  const handleSave = async () => {
-    if (!parsedData || !user) return;
-    setStatus('saving');
-    try {
-      await saveMasterData(user.uid, parsedData);
-      onSetupComplete(parsedData);
-      toast({ title: "Success!", description: "Your master data has been saved." });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "An unknown error occurred.";
-      setStatus('idle');
-      toast({ variant: "destructive", title: "Save Failed", description: message });
-    }
+  
+  const handleStartManually = () => {
+    router.push('/profile');
   };
 
-  if (!parsedData) {
+  if (setupMode === 'choice') {
     return (
-      <CardContent className="space-y-4 pt-6">
+       <CardContent className="space-y-4 pt-6">
         <Alert>
           <Database className="h-4 w-4" />
-          <AlertTitle>Welcome! Let's get started.</AlertTitle>
+          <AlertTitle>Welcome! Let's get your data setup.</AlertTitle>
           <AlertDescription>
-            Please upload your master data sheet to begin. This is a one-time setup. The file should be an .xlsx where column A is the field name and column B is the value.
+            You can upload an Excel sheet with your master data, or enter it manually.
           </AlertDescription>
         </Alert>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Button variant="outline" size="lg" className="h-auto py-6 flex flex-col gap-2" onClick={() => setSetupMode('upload')}>
+                <CloudUpload className="h-8 w-8"/>
+                <span>Upload Master Sheet</span>
+                <span className="text-xs font-normal text-muted-foreground">(.xlsx file, Column A: Fields, Column B: Values)</span>
+            </Button>
+            <Button variant="outline" size="lg" className="h-auto py-6 flex flex-col gap-2" onClick={handleStartManually}>
+                <Pencil className="h-8 w-8"/>
+                <span>Enter Data Manually</span>
+                <span className="text-xs font-normal text-muted-foreground">We'll start you with some common fields.</span>
+            </Button>
+        </div>
+      </CardContent>
+    );
+  }
+
+  if (setupMode === 'upload') {
+     return (
+      <CardContent className="space-y-4 pt-6">
         <FileUploadDropzone
           file={masterDataFile}
           onFileChange={handleFileChange}
@@ -323,38 +334,14 @@ function InitialSetup({ onSetupComplete }) {
           description="Excel files only (.xlsx)"
           inputId="master-data-upload"
         />
-        <Button onClick={handleParse} disabled={!masterDataFile || status === 'parsing'} className="w-full" size="lg">
-          {status === 'parsing' ? <><Loader className="mr-2 h-4 w-4 animate-spin" /> Parsing...</> : "Parse & Preview"}
-        </Button>
+        <Button onClick={() => setSetupMode('choice')} variant="link">Back to options</Button>
       </CardContent>
     );
   }
-
-  return (
-    <CardContent className="space-y-4 pt-6">
-       <Alert>
-          <ListChecks className="h-4 w-4" />
-          <AlertTitle>Preview Your Data</AlertTitle>
-          <AlertDescription>
-            Review the parsed data below. If it's correct, save it to complete your setup.
-          </AlertDescription>
-        </Alert>
-        <ScrollArea className="h-72 w-full rounded-md border">
-          <Table>
-            <TableHeader><TableRow><TableHead>Field Name</TableHead><TableHead>Value</TableHead></TableRow></TableHeader>
-            <TableBody>
-              {Object.entries(parsedData).map(([key, value]) => (
-                <TableRow key={key}><TableCell className="font-medium">{key}</TableCell><TableCell>{value}</TableCell></TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </ScrollArea>
-        <Button onClick={handleSave} disabled={status === 'saving'} className="w-full" size="lg">
-          {status === 'saving' ? <><Loader className="mr-2 h-4 w-4 animate-spin" /> Saving...</> : "Save and Continue"}
-        </Button>
-    </CardContent>
-  );
+  
+  return null;
 }
+
 
 function FormFiller({ masterData, onMasterDataUpdate }) {
   const { toast } = useToast();
@@ -593,7 +580,12 @@ export default function Home() {
             {masterData ? 'Instantly fill any Excel or PDF form from your master data.' : 'Your personal form-filling assistant.'}
           </CardDescription>
           {user && (
-            <div className="absolute top-4 right-4">
+            <div className="absolute top-4 right-4 flex items-center gap-2">
+              <Link href="/profile">
+                <Button variant="ghost" size="icon" title="Profile">
+                    <UserIcon className="h-5 w-5" />
+                </Button>
+              </Link>
               <Button variant="ghost" size="icon" onClick={handleSignOut} title="Sign Out">
                 <LogOut className="h-5 w-5" />
               </Button>
@@ -605,3 +597,5 @@ export default function Home() {
     </main>
   );
 }
+
+    
