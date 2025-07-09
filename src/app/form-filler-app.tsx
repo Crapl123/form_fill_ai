@@ -69,18 +69,18 @@ const initialProcessState: FormState = {
 const FileUploadDropzone = ({ file, onFileChange, icon, title, description, inputId, accept, ...props }) => {
   return (
     <label htmlFor={inputId} className="cursor-pointer">
-      <div className="flex flex-col items-center justify-center space-y-2 rounded-lg border-2 border-dashed border-slate-600 p-10 text-center transition hover:border-indigo-500 bg-slate-800/50 hover:bg-slate-800">
+      <div className="flex flex-col items-center justify-center space-y-2 rounded-lg border-2 border-dashed border-border p-10 text-center transition hover:border-primary bg-secondary/50 hover:bg-secondary">
         {file ? (
           <>
             <FileCheck className="h-10 w-10 text-green-500" />
-            <p className="font-semibold text-slate-100">{file.name}</p>
-            <p className="text-xs text-slate-400">Click or drag to change file</p>
+            <p className="font-semibold text-foreground">{file.name}</p>
+            <p className="text-xs text-muted-foreground">Click or drag to change file</p>
           </>
         ) : (
           <>
             {icon}
-            <p className="font-semibold text-slate-100">{title}</p>
-            <p className="text-xs text-slate-400">{description}</p>
+            <p className="font-semibold text-foreground">{title}</p>
+            <p className="text-xs text-muted-foreground">{description}</p>
           </>
         )}
       </div>
@@ -178,12 +178,12 @@ function CorrectionForm({ processState, masterData, onMasterDataUpdate, onBack }
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 {uniqueMissingFields.map(item => (
                     <div className="space-y-2" key={item.targetCell}>
-                        <Label htmlFor={`missing_${item.targetCell}`} className="text-slate-200">{item.labelGuessed}</Label>
+                        <Label htmlFor={`missing_${item.targetCell}`} className="text-foreground">{item.labelGuessed}</Label>
                         <Input 
                             id={`missing_${item.targetCell}`}
                             name={`missing_${item.targetCell}`}
                             placeholder={`Enter value for ${item.labelGuessed}...`}
-                            className="bg-slate-800 border-slate-600 text-white"
+                            className="bg-background border-border"
                         />
                     </div>
                 ))}
@@ -192,11 +192,11 @@ function CorrectionForm({ processState, masterData, onMasterDataUpdate, onBack }
       )}
 
       <div>
-          <h3 className="mb-2 font-semibold text-slate-100">Make Text-based Corrections (Optional)</h3>
+          <h3 className="mb-2 font-semibold text-foreground">Make Text-based Corrections (Optional)</h3>
           <Textarea
             name="correctionRequest"
             placeholder="e.g., Change the value in B5 to 'Completed'. Remove the value from C10."
-            className="min-h-[100px] bg-slate-800 border-slate-600 text-white"
+            className="min-h-[100px] bg-background border-border"
           />
       </div>
 
@@ -216,7 +216,7 @@ function CorrectionForm({ processState, masterData, onMasterDataUpdate, onBack }
         {downloadUrl ? (
           <div className="flex flex-col gap-2">
             <a href={downloadUrl} download={correctionState.fileName} className="w-full">
-              <Button className="w-full bg-indigo-600 hover:bg-indigo-500 text-white" size="lg" variant="default" type="button">
+              <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" size="lg" variant="default" type="button">
                 <Download className="mr-2 h-4 w-4" />
                 Download Corrected Form
               </Button>
@@ -231,13 +231,13 @@ function CorrectionForm({ processState, masterData, onMasterDataUpdate, onBack }
             )}
           </div>
         ) : (
-          <Button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-500 text-white" size="lg" disabled={isSubmittingCorrections}>
+          <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" size="lg" disabled={isSubmittingCorrections}>
             {isSubmittingCorrections ? <><Loader className="mr-2 h-4 w-4 animate-spin" /> Applying Changes...</> : <><Wand2 className="mr-2 h-4 w-4" /> Apply Changes & Download</>}
           </Button>
         )}
       </div>
 
-       <Button variant="outline" onClick={onBack} className="w-full border-slate-600 hover:bg-slate-800">
+       <Button variant="outline" onClick={onBack} className="w-full border-border hover:bg-secondary">
           <ArrowLeft className="mr-2 h-4 w-4"/>
           Back to Upload
        </Button>
@@ -344,23 +344,23 @@ function InitialSetup({ onSetupComplete }) {
   if (setupMode === 'choice') {
     return (
        <CardContent className="space-y-4 pt-6">
-        <Alert className="bg-slate-800 border-slate-700 text-slate-300">
-          <Database className="h-4 w-4 text-indigo-400" />
-          <AlertTitle className="text-white">Welcome! Let's get your data setup.</AlertTitle>
+        <Alert className="bg-secondary/50 border-border text-muted-foreground">
+          <Database className="h-4 w-4 text-primary" />
+          <AlertTitle className="text-foreground">Welcome! Let's get your data setup.</AlertTitle>
           <AlertDescription>
             You can upload an Excel/CSV sheet with your master data, or enter it manually.
           </AlertDescription>
         </Alert>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Button variant="outline" size="lg" className="h-auto py-6 flex flex-col gap-2 border-slate-600 hover:bg-slate-800 hover:border-indigo-500" onClick={() => setSetupMode('upload')}>
-                <CloudUpload className="h-8 w-8 text-indigo-400"/>
-                <span className="text-slate-100">Upload Master Sheet</span>
-                <span className="text-xs font-normal text-slate-400">(.xlsx or .csv)</span>
+            <Button variant="outline" size="lg" className="h-auto py-6 flex flex-col gap-2 border-border hover:bg-secondary hover:border-primary/50" onClick={() => setSetupMode('upload')}>
+                <CloudUpload className="h-8 w-8 text-primary"/>
+                <span className="text-foreground">Upload Master Sheet</span>
+                <span className="text-xs font-normal text-muted-foreground">(.xlsx or .csv)</span>
             </Button>
-            <Button variant="outline" size="lg" className="h-auto py-6 flex flex-col gap-2 border-slate-600 hover:bg-slate-800 hover:border-indigo-500" onClick={handleStartManually}>
-                <Pencil className="h-8 w-8 text-indigo-400"/>
-                <span className="text-slate-100">Enter Data Manually</span>
-                <span className="text-xs font-normal text-slate-400">We'll start you with some common fields.</span>
+            <Button variant="outline" size="lg" className="h-auto py-6 flex flex-col gap-2 border-border hover:bg-secondary hover:border-primary/50" onClick={handleStartManually}>
+                <Pencil className="h-8 w-8 text-primary"/>
+                <span className="text-foreground">Enter Data Manually</span>
+                <span className="text-xs font-normal text-muted-foreground">We'll start you with some common fields.</span>
             </Button>
         </div>
       </CardContent>
@@ -373,13 +373,13 @@ function InitialSetup({ onSetupComplete }) {
         <FileUploadDropzone
           file={masterDataFile}
           onFileChange={handleFileChange}
-          icon={<Database className="h-10 w-10 text-slate-500" />}
+          icon={<Database className="h-10 w-10 text-muted-foreground" />}
           title="Upload Master Data Sheet"
           description="Excel (.xlsx) or CSV (.csv) files only"
           inputId="master-data-upload"
           accept=".xlsx, .csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, text/csv"
         />
-        <Button onClick={() => setSetupMode('choice')} variant="link" className="text-indigo-400">Back to options</Button>
+        <Button onClick={() => setSetupMode('choice')} variant="link" className="text-primary">Back to options</Button>
       </CardContent>
     );
   }
@@ -451,7 +451,7 @@ function FormFiller({ masterData, onMasterDataUpdate }) {
           <FileUploadDropzone
               file={vendorFormFile}
               onFileChange={handleVendorFormFileChange}
-              icon={<CloudUpload className="h-10 w-10 text-slate-500" />}
+              icon={<CloudUpload className="h-10 w-10 text-muted-foreground" />}
               title="Upload Form To Fill"
               description="Excel or PDF files only (.xlsx, .pdf)"
               inputId="file"
@@ -462,7 +462,7 @@ function FormFiller({ masterData, onMasterDataUpdate }) {
           
           {isProcessing && (
             <div className="space-y-2">
-               <div className="flex items-center gap-3 text-indigo-400">
+               <div className="flex items-center gap-3 text-primary">
                   <Loader className="h-5 w-5 animate-spin" />
                   <span className="font-medium">AI is analyzing and filling your form...</span>
                </div>
@@ -479,7 +479,7 @@ function FormFiller({ masterData, onMasterDataUpdate }) {
           )}
         </CardContent>
         <CardFooter>
-          <Button type="submit" disabled={isProcessing || !vendorFormFile} className="w-full bg-indigo-600 text-white hover:bg-indigo-500" size="lg">
+          <Button type="submit" disabled={isProcessing || !vendorFormFile} className="w-full bg-primary text-primary-foreground hover:bg-primary/90" size="lg">
               {isProcessing ? <><Loader className="mr-2 h-4 w-4 animate-spin" /> Processing...</> : <><Zap className="mr-2 h-4 w-4" /> Auto-Fill Form</>}
           </Button>
         </CardFooter>
@@ -489,16 +489,16 @@ function FormFiller({ masterData, onMasterDataUpdate }) {
 
   return (
     <CardContent className="space-y-4 pt-6">
-      <Alert className="bg-slate-800 border-slate-700 text-slate-300">
-        <FileEdit className="h-4 w-4 text-indigo-400" />
-        <AlertTitle className="text-white">Preview, Fill & Correct</AlertTitle>
+      <Alert className="bg-secondary/50 border-border text-muted-foreground">
+        <FileEdit className="h-4 w-4 text-primary" />
+        <AlertTitle className="text-foreground">Preview, Fill & Correct</AlertTitle>
         <AlertDescription>
           The AI has filled what it can. Please provide any missing information and make corrections below.
         </AlertDescription>
       </Alert>
 
       {processState.mimeType === 'application/pdf' && processState.fileData ? (
-        <div className="rounded-md border border-slate-700">
+        <div className="rounded-md border border-border">
           <iframe
             src={`data:application/pdf;base64,${processState.fileData}`}
             className="h-[600px] w-full"
@@ -507,26 +507,26 @@ function FormFiller({ masterData, onMasterDataUpdate }) {
         </div>
       ) : (
         <div>
-            <h3 className="mb-2 font-semibold text-slate-100">AI Auto-Filled Data</h3>
-            <ScrollArea className="h-60 w-full rounded-md border border-slate-700">
+            <h3 className="mb-2 font-semibold text-foreground">AI Auto-Filled Data</h3>
+            <ScrollArea className="h-60 w-full rounded-md border border-border">
             <Table>
                 <TableHeader>
-                <TableRow className="border-slate-700 hover:bg-slate-800/50">
-                    <TableHead className="text-slate-400">Guessed Label</TableHead>
-                    <TableHead className="text-slate-400">Cell Filled</TableHead>
-                    <TableHead className="text-slate-400">Value Filled</TableHead>
+                <TableRow className="border-border hover:bg-secondary/50">
+                    <TableHead className="text-muted-foreground">Guessed Label</TableHead>
+                    <TableHead className="text-muted-foreground">Cell Filled</TableHead>
+                    <TableHead className="text-muted-foreground">Value Filled</TableHead>
                 </TableRow>
                 </TableHeader>
                 <TableBody>
                 {processState.previewData?.length > 0 ? processState.previewData?.map((item) => (
-                    <TableRow key={item.cell} className="border-slate-800 hover:bg-slate-800/50">
-                    <TableCell className="text-slate-400">{item.labelGuessed || 'N/A'}</TableCell>
-                    <TableCell className="font-mono text-sky-400">{item.cell}</TableCell>
-                    <TableCell className="font-medium text-slate-100">{item.value}</TableCell>
+                    <TableRow key={item.cell} className="border-border hover:bg-secondary/50">
+                    <TableCell className="text-muted-foreground">{item.labelGuessed || 'N/A'}</TableCell>
+                    <TableCell className="font-mono text-accent">{item.cell}</TableCell>
+                    <TableCell className="font-medium text-foreground">{item.value}</TableCell>
                     </TableRow>
                 )) : (
-                    <TableRow className="border-slate-800 hover:bg-slate-800/50">
-                        <TableCell colSpan={3} className="text-center text-slate-500">The AI could not fill any fields automatically.</TableCell>
+                    <TableRow className="border-border hover:bg-secondary/50">
+                        <TableCell colSpan={3} className="text-center text-muted-foreground">The AI could not fill any fields automatically.</TableCell>
                     </TableRow>
                 )}
                 </TableBody>
@@ -597,7 +597,7 @@ export default function FormFillerApp() {
     if (authLoading || (user && loadingData)) {
       return (
         <CardContent className="flex justify-center items-center h-64">
-          <Loader className="h-12 w-12 animate-spin text-indigo-500" />
+          <Loader className="h-12 w-12 animate-spin text-primary" />
         </CardContent>
       );
     }
@@ -616,11 +616,11 @@ export default function FormFillerApp() {
     if (!user) {
         return (
              <CardContent className="text-center pt-6">
-                <Alert className="bg-slate-800 border-slate-700 text-slate-300">
-                    <Zap className="h-4 w-4 text-indigo-400" />
-                    <AlertTitle className="text-white">Start Filling Forms</AlertTitle>
+                <Alert className="bg-secondary/50 border-border text-muted-foreground">
+                    <Zap className="h-4 w-4 text-primary" />
+                    <AlertTitle className="text-foreground">Start Filling Forms</AlertTitle>
                     <AlertDescription>
-                        <Link href="/login" className="font-bold text-indigo-400 hover:underline">Log in</Link> or <Link href="/login" className="font-bold text-indigo-400 hover:underline">sign up</Link> to save your master data and start filling forms instantly.
+                        <Link href="/login" className="font-bold text-primary hover:underline">Log in</Link> or <Link href="/login" className="font-bold text-primary hover:underline">sign up</Link> to save your master data and start filling forms instantly.
                     </AlertDescription>
                 </Alert>
             </CardContent>
@@ -631,23 +631,23 @@ export default function FormFillerApp() {
   }
 
   return (
-      <Card className="w-full max-w-4xl mx-auto shadow-2xl bg-slate-800/40 border-slate-700/80 text-white">
+      <Card className="w-full max-w-4xl mx-auto shadow-2xl bg-card border-border text-foreground">
         <CardHeader className="text-center relative">
-          <div className="mx-auto bg-indigo-500/10 text-indigo-400 rounded-full p-3 w-fit mb-4 border border-indigo-500/20">
+          <div className="mx-auto bg-primary/10 text-primary rounded-full p-3 w-fit mb-4 border border-primary/20">
             <Wand2 className="h-8 w-8" />
           </div>
           <CardTitle className="text-3xl font-bold">Try Form AutoFill AI</CardTitle>
-          <CardDescription className="text-base max-w-2xl mx-auto text-slate-400">
+          <CardDescription className="text-base max-w-2xl mx-auto text-muted-foreground">
             Upload your form below to see the AI in action.
           </CardDescription>
           {user && (
             <div className="absolute top-4 right-4 flex items-center gap-2">
               <Link href="/profile">
-                <Button variant="ghost" size="icon" title="Profile" className="text-slate-300 hover:text-white hover:bg-slate-700">
+                <Button variant="ghost" size="icon" title="Profile" className="text-muted-foreground hover:text-foreground hover:bg-secondary">
                     <UserIcon className="h-5 w-5" />
                 </Button>
               </Link>
-              <Button variant="ghost" size="icon" onClick={handleSignOut} title="Sign Out" className="text-slate-300 hover:text-white hover:bg-slate-700">
+              <Button variant="ghost" size="icon" onClick={handleSignOut} title="Sign Out" className="text-muted-foreground hover:text-foreground hover:bg-secondary">
                 <LogOut className="h-5 w-5" />
               </Button>
             </div>

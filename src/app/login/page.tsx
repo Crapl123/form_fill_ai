@@ -56,22 +56,22 @@ export default function LoginPage() {
   
   if (loading || user) {
     return (
-        <div className="flex min-h-screen flex-col items-center justify-center bg-slate-900">
-            <Loader className="h-12 w-12 animate-spin text-indigo-500" />
-            {user && <p className="mt-4 text-slate-400">Redirecting...</p>}
+        <div className="flex min-h-screen flex-col items-center justify-center bg-background">
+            <Loader className="h-12 w-12 animate-spin text-primary" />
+            {user && <p className="mt-4 text-muted-foreground">Redirecting...</p>}
         </div>
     )
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-4 sm:p-8 bg-slate-900">
-      <Card className="w-full max-w-md shadow-2xl bg-slate-800/40 border-slate-700/80 text-white">
+    <main className="flex min-h-screen flex-col items-center justify-center p-4 sm:p-8 bg-background">
+      <Card className="w-full max-w-md shadow-2xl bg-card border-border text-foreground">
         <CardHeader className="text-center">
-          <div className="mx-auto bg-indigo-500/10 text-indigo-400 rounded-full p-3 w-fit mb-4 border border-indigo-500/20">
+          <div className="mx-auto bg-primary/10 text-primary rounded-full p-3 w-fit mb-4 border border-primary/20">
             <Bot className="h-8 w-8" />
           </div>
           <CardTitle className="text-3xl font-bold">Welcome to Form AutoFill AI</CardTitle>
-          <CardDescription className="text-base text-slate-400">
+          <CardDescription className="text-base text-muted-foreground">
             Sign in to continue to your personal form-filling assistant.
           </CardDescription>
         </CardHeader>
@@ -91,7 +91,7 @@ export default function LoginPage() {
                 )}
                 {isSigningIn ? 'Redirecting...' : 'Sign In with Google'}
             </Button>
-            <p className="text-center text-xs text-slate-500">
+            <p className="text-center text-xs text-muted-foreground">
                 By signing in, you agree to our terms of service.
             </p>
         </CardContent>

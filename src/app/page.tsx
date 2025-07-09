@@ -15,31 +15,31 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 const FeatureCard = ({ icon, title, description }) => (
-  <div className="flex flex-col items-start p-6 bg-slate-800/50 rounded-lg border border-slate-700/50 hover:border-slate-600 transition-colors">
-    <div className="mb-4 p-3 bg-indigo-500/10 text-indigo-400 rounded-lg border border-indigo-500/20">
+  <div className="flex flex-col items-start p-6 bg-card rounded-lg border border-border hover:border-primary/20 transition-colors">
+    <div className="mb-4 p-3 bg-primary/10 text-primary rounded-lg border border-primary/20">
       {icon}
     </div>
-    <h3 className="font-bold text-lg text-slate-100 mb-2">{title}</h3>
-    <p className="text-slate-400 leading-relaxed">{description}</p>
+    <h3 className="font-bold text-lg text-card-foreground mb-2">{title}</h3>
+    <p className="text-muted-foreground leading-relaxed">{description}</p>
   </div>
 );
 
 const HowItWorksStep = ({ icon, title, description }) => (
-    <div className="flex flex-col items-center text-center p-6 bg-slate-800/50 rounded-lg border border-slate-700/50">
-        <div className="mb-4 p-3 bg-indigo-500/10 text-indigo-400 rounded-lg border border-indigo-500/20">
+    <div className="flex flex-col items-center text-center p-6 bg-card rounded-lg border border-border">
+        <div className="mb-4 p-3 bg-primary/10 text-primary rounded-lg border border-primary/20">
             {icon}
         </div>
-        <h3 className="font-semibold text-lg text-slate-100">{title}</h3>
-        <p className="text-slate-400 text-sm">{description}</p>
+        <h3 className="font-semibold text-lg text-card-foreground">{title}</h3>
+        <p className="text-muted-foreground text-sm">{description}</p>
     </div>
 );
 
 const TestimonialCard = ({ quote, author, role }) => (
-    <div className="p-6 bg-slate-800/50 rounded-lg border border-slate-700/50">
-        <blockquote className="text-slate-300 italic mb-4">“{quote}”</blockquote>
+    <div className="p-6 bg-card rounded-lg border border-border">
+        <blockquote className="text-foreground italic mb-4">“{quote}”</blockquote>
         <div className="text-right">
-            <p className="font-semibold text-slate-100">{author}</p>
-            <p className="text-sm text-indigo-400">{role}</p>
+            <p className="font-semibold text-card-foreground">{author}</p>
+            <p className="text-sm text-primary">{role}</p>
         </div>
     </div>
 )
@@ -50,20 +50,20 @@ const ThemeToggle = () => {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="text-slate-300 hover:text-white hover:bg-slate-800">
+        <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground hover:bg-secondary">
           <Sun className="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
           <Moon className="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
           <span className="sr-only">Toggle theme</span>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="bg-slate-800/80 backdrop-blur border-slate-700 text-slate-300">
-        <DropdownMenuItem onClick={() => setTheme("light")} className="hover:!bg-slate-700">
+      <DropdownMenuContent align="end" className="bg-background border-border text-foreground">
+        <DropdownMenuItem onClick={() => setTheme("light")} className="hover:!bg-secondary">
           Light
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme("dark")} className="hover:!bg-slate-700">
+        <DropdownMenuItem onClick={() => setTheme("dark")} className="hover:!bg-secondary">
           Dark
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme("system")} className="hover:!bg-slate-700">
+        <DropdownMenuItem onClick={() => setTheme("system")} className="hover:!bg-secondary">
           System
         </DropdownMenuItem>
       </DropdownMenuContent>
@@ -73,21 +73,21 @@ const ThemeToggle = () => {
 
 export default function LandingPage() {
   return (
-    <main className="bg-slate-900 text-slate-300 font-body antialiased">
+    <main className="bg-background text-foreground font-body antialiased">
       {/* Header */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-slate-900/80 backdrop-blur-sm border-b border-slate-800">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-sm border-b border-border">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
           <div className="flex items-center gap-2">
-            <Bot className="h-7 w-7 text-indigo-400" />
-            <span className="font-bold text-xl text-white">Form AutoFill AI</span>
+            <Bot className="h-7 w-7 text-primary" />
+            <span className="font-bold text-xl text-foreground">Form AutoFill AI</span>
           </div>
           <div className="flex items-center gap-2">
             <ThemeToggle />
             <Link href="/login" passHref>
-              <Button variant="ghost" className="text-slate-300 hover:text-white hover:bg-slate-800">Login</Button>
+              <Button variant="ghost" className="text-muted-foreground hover:text-foreground hover:bg-secondary">Login</Button>
             </Link>
             <Link href="/login" passHref>
-              <Button variant="default" className="bg-indigo-600 text-white hover:bg-indigo-500">
+              <Button variant="default" className="bg-primary text-primary-foreground hover:bg-primary/90">
                 Sign Up <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </Link>
@@ -97,17 +97,17 @@ export default function LandingPage() {
 
       {/* Hero Section */}
       <section className="relative pt-32 pb-20 text-center container mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="absolute inset-0 -z-10 h-full w-full bg-slate-900 bg-[linear-gradient(to_right,#8080800a_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] bg-[size:14px_24px]"></div>
-        <div className="absolute left-0 top-0 -z-10 h-1/3 w-full bg-gradient-to-b from-indigo-950/50 to-transparent"></div>
-        <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight text-white mb-4">
+        <div className="absolute inset-0 -z-10 h-full w-full bg-background bg-[linear-gradient(to_right,hsl(var(--border)_/_0.1)_1px,transparent_1px),linear-gradient(to_bottom,hsl(var(--border)_/_0.1)_1px,transparent_1px)] bg-[size:14px_24px]"></div>
+        <div className="absolute left-0 top-0 -z-10 h-1/3 w-full bg-gradient-to-b from-primary/10 to-transparent"></div>
+        <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight text-foreground mb-4">
           Fill Complex Forms in Seconds with AI
         </h1>
-        <p className="max-w-2xl mx-auto text-lg text-slate-400 mb-8">
-          Upload any supplier or vendor form (Excel or PDF) and get it filled instantly using your saved company data.
+        <p className="max-w-2xl mx-auto text-lg text-muted-foreground mb-8">
+          Upload any supplier or vendor form - Excel or PDF - and get it filled instantly using your saved company data.
         </p>
         <div className="flex justify-center">
             <Link href="#app" passHref>
-              <Button size="lg" className="bg-indigo-600 text-white hover:bg-indigo-500 text-base font-semibold px-8 py-6">
+              <Button size="lg" className="bg-primary text-primary-foreground hover:bg-primary/90 text-base font-semibold px-8 py-6">
                 Try It Now <Zap className="ml-2 h-5 w-5"/>
               </Button>
             </Link>
@@ -115,9 +115,9 @@ export default function LandingPage() {
       </section>
 
       {/* How It Works */}
-      <section className="py-20 bg-slate-900/50">
+      <section className="py-20 bg-secondary/50">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-            <h2 className="text-3xl font-bold text-center text-white mb-12">How It Works</h2>
+            <h2 className="text-3xl font-bold text-center text-foreground mb-12">How It Works</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                 <HowItWorksStep icon={<Feather className="h-7 w-7"/>} title="1. Add Master Data" description="Securely enter or upload your company's master data just once." />
                 <HowItWorksStep icon={<FileText className="h-7 w-7"/>} title="2. Upload Any Form" description="Drag and drop any structured supplier form, in Excel or PDF format." />
@@ -134,9 +134,9 @@ export default function LandingPage() {
       </section>
       
       {/* Features Section */}
-      <section className="py-20 bg-slate-900/50">
+      <section className="py-20 bg-secondary/50">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="text-3xl font-bold text-center text-white mb-12">Powerful Features, Simple Interface</h2>
+          <h2 className="text-3xl font-bold text-center text-foreground mb-12">Powerful Features, Simple Interface</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
             <FeatureCard
               icon={<Bot className="h-7 w-7"/>}
@@ -166,32 +166,32 @@ export default function LandingPage() {
       <section className="py-20">
           <div className="container mx-auto px-4 sm:px-6 lg:px-8">
               <div className="max-w-2xl mx-auto text-center">
-                 <h2 className="text-3xl font-bold text-white mb-4">Get Started for Free</h2>
-                 <p className="text-slate-400 mb-8">
+                 <h2 className="text-3xl font-bold text-foreground mb-4">Get Started for Free</h2>
+                 <p className="text-muted-foreground mb-8">
                     Try out the full power of the app with a generous free plan. Upgrade when you need more.
                  </p>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-                <div className="p-8 bg-slate-800/50 rounded-lg border border-slate-700 text-center">
-                    <h3 className="text-2xl font-bold text-white mb-2">Free</h3>
-                    <p className="text-slate-400 mb-6">For individuals and small-scale use</p>
-                    <p className="text-4xl font-bold text-white mb-6">1 <span className="text-lg font-medium text-slate-400">form fill / day</span></p>
-                    <Button variant="outline" className="w-full border-indigo-500 text-indigo-400 hover:bg-indigo-500 hover:text-white">Start for Free</Button>
+                <div className="p-8 bg-card rounded-lg border border-border text-center">
+                    <h3 className="text-2xl font-bold text-card-foreground mb-2">Free</h3>
+                    <p className="text-muted-foreground mb-6">For individuals and small-scale use</p>
+                    <p className="text-4xl font-bold text-card-foreground mb-6">1 <span className="text-lg font-medium text-muted-foreground">form fill / day</span></p>
+                    <Button variant="outline" className="w-full border-primary text-primary hover:bg-primary hover:text-primary-foreground">Start for Free</Button>
                 </div>
-                 <div className="p-8 bg-slate-800/50 rounded-lg border border-indigo-500 text-center ring-2 ring-indigo-500/50">
-                    <h3 className="text-2xl font-bold text-white mb-2">Pro</h3>
-                    <p className="text-slate-400 mb-6">For teams and frequent users</p>
-                    <p className="text-4xl font-bold text-white mb-6">Unlimited <span className="text-lg font-medium text-slate-400">form fills</span></p>
-                    <Button variant="default" className="w-full bg-indigo-600 hover:bg-indigo-500 text-white">Subscribe to Pro</Button>
+                 <div className="p-8 bg-card rounded-lg border border-primary text-center ring-2 ring-primary/50">
+                    <h3 className="text-2xl font-bold text-card-foreground mb-2">Pro</h3>
+                    <p className="text-muted-foreground mb-6">For teams and frequent users</p>
+                    <p className="text-4xl font-bold text-card-foreground mb-6">Unlimited <span className="text-lg font-medium text-muted-foreground">form fills</span></p>
+                    <Button variant="default" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">Subscribe to Pro</Button>
                 </div>
               </div>
           </div>
       </section>
 
       {/* Testimonials */}
-      <section className="py-20 bg-slate-900/50">
+      <section className="py-20 bg-secondary/50">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="text-3xl font-bold text-center text-white mb-12">Loved by Teams Everywhere</h2>
+          <h2 className="text-3xl font-bold text-center text-foreground mb-12">Loved by Teams Everywhere</h2>
            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               <TestimonialCard quote="This tool saved our admin team hours every week. What used to be a manual copy-paste marathon is now a one-click process." author="Sarah J." role="Procurement Manager" />
               <TestimonialCard quote="As a small business owner, I wear many hats. Form AutoFill AI took one of the most tedious tasks off my plate completely." author="Mike R." role="Founder, Creative Co." />
@@ -201,13 +201,13 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-slate-800">
-        <div className="container mx-auto py-8 px-4 sm:px-6 lg:px-8 text-center text-slate-500">
+      <footer className="border-t border-border">
+        <div className="container mx-auto py-8 px-4 sm:px-6 lg:px-8 text-center text-muted-foreground">
           <div className="flex justify-center gap-6 mb-4">
-            <Link href="#" className="hover:text-slate-300">About</Link>
-            <Link href="#" className="hover:text-slate-300">FAQ</Link>
-            <Link href="#" className="hover:text-slate-300">Contact</Link>
-            <Link href="#" className="hover:text-slate-300">Privacy Policy</Link>
+            <Link href="#" className="hover:text-foreground">About</Link>
+            <Link href="#" className="hover:text-foreground">FAQ</Link>
+            <Link href="#" className="hover:text-foreground">Contact</Link>
+            <Link href="#" className="hover:text-foreground">Privacy Policy</Link>
           </div>
           <p>&copy; {new Date().getFullYear()} Form AutoFill AI. All rights reserved.</p>
         </div>
