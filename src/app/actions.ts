@@ -9,6 +9,36 @@ import { createMasterDataExcel, fillExcelData, FillInstruction } from "@/lib/exc
 import ExcelJS from "exceljs";
 import { PDFDocument } from "pdf-lib";
 
+/**
+ * Retries a function if it fails with a specific "model overloaded" error.
+ * Uses exponential backoff for delays.
+ * @param fn The async function to retry.
+ * @param retries The maximum number of retries.
+ * @param delay The initial delay in milliseconds.
+ * @returns The result of the function if successful.
+ */
+async function retryOnOverload<T>(fn: () => Promise<T>, retries = 3, delay = 1500): Promise<T> {
+  let lastError: unknown;
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      
+      // Only retry for specific, transient overload errors.
+      if (errorMessage.includes('The model is overloaded') && i < retries - 1) {
+        console.log(`Model overloaded. Attempt ${i + 1} of ${retries}. Retrying in ${delay * (i + 1)}ms...`);
+        await new Promise(res => setTimeout(res, delay * (i + 1))); // Use exponential backoff
+      } else {
+        // For other errors, or on the last retry, fail immediately.
+        throw lastError;
+      }
+    }
+  }
+  throw lastError; // This should be unreachable due to the loop condition, but is good practice.
+}
+
 
 interface FilledField {
   cell: string;
@@ -101,9 +131,9 @@ async function handleExcelProcessing(fileBuffer: Buffer, masterData: Record<stri
         throw new Error("The first sheet of the Excel file appears to have no content to analyze.");
     }
     
-    const formStructure = await extractFieldsFromExcel({
+    const formStructure = await retryOnOverload(() => extractFieldsFromExcel({
         excelContent: JSON.stringify(supplierFormCells)
-    });
+    }));
 
     if (!formStructure || formStructure.length === 0) {
         throw new Error(
@@ -111,10 +141,10 @@ async function handleExcelProcessing(fileBuffer: Buffer, masterData: Record<stri
         );
     }
     
-    const aiResponse = await fillSupplierForm({
+    const aiResponse = await retryOnOverload(() => fillSupplierForm({
         vendorData,
         formStructure,
-    });
+    }));
 
     if (!aiResponse || (!aiResponse.fieldsToFill?.length && !aiResponse.fieldsToQuery?.length)) {
         throw new Error(
@@ -158,10 +188,10 @@ async function handlePdfProcessing(
       value,
     }));
 
-    const fillInstructions = await mapDataToPdfFields({
+    const fillInstructions = await retryOnOverload(() => mapDataToPdfFields({
       vendorData,
       pdfFieldNames,
-    });
+    }));
 
     if (!fillInstructions || fillInstructions.length === 0) {
       throw new Error(
@@ -321,10 +351,10 @@ export async function applyCorrections(
                 });
             });
 
-            correctionInstructions = await correctFilledForm({
+            correctionInstructions = await retryOnOverload(() => correctFilledForm({
                 userFeedback: correctionRequest,
                 currentSheetData,
-            });
+            }));
 
             if (!correctionInstructions) {
                  console.warn("AI returned null for correction request.");
