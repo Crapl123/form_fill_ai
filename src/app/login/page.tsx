@@ -37,6 +37,13 @@ export default function LoginPage() {
       await signInWithGoogle();
       // On success, the useEffect above will handle the redirect.
     } catch (error: any) {
+      // This is a common user action, not a true "error" to be displayed.
+      // We just reset the UI.
+      if (error.code === 'auth/popup-closed-by-user') {
+        setIsSigningIn(false);
+        return; 
+      }
+      
       if (error.code === 'auth/unauthorized-domain') {
         setAuthError(
             `This app's domain is not authorized for login. Please go to your Firebase Console -> Authentication -> Settings -> Authorized domains, and add the domain from your browser's address bar.`
