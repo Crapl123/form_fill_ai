@@ -18,14 +18,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Loader,
@@ -71,10 +63,9 @@ export default function ProfilePage() {
 
     getMasterData(user.uid)
       .then((data) => {
-        if (data) {
+        if (data && Object.keys(data).length > 0) {
           setMasterData(data);
         } else {
-          // If no data, start with default fields
           setMasterData(defaultFields);
         }
       })
@@ -90,16 +81,29 @@ export default function ProfilePage() {
         setIsLoading(false);
       });
   }, [user, authLoading, router, toast]);
-
-  const handleFieldChange = (oldKey: string, newKey: string, value: string) => {
+  
+  const handleFieldChange = (oldKey: string, newKey: string) => {
     setMasterData(prev => {
         if (!prev) return null;
-        const newData = {...prev};
-        if (oldKey !== newKey) {
-            delete newData[oldKey];
+
+        // Check if newKey already exists and it's not the same as oldKey
+        if (newKey !== oldKey && newKey in prev) {
+            toast({
+                variant: "destructive",
+                title: "Duplicate Field Name",
+                description: "Field names must be unique. Please choose a different name."
+            });
+            return prev; // Return original state to prevent the change
         }
-        newData[newKey] = value;
-        return newData;
+
+        const entries = Object.entries(prev);
+        const newEntries = entries.map(([key, value]) => {
+            if (key === oldKey) {
+                return [newKey, value];
+            }
+            return [key, value];
+        });
+        return Object.fromEntries(newEntries);
     });
   };
 
@@ -184,41 +188,43 @@ export default function ProfilePage() {
                 </Alert>
             )}
             {masterData && (
-              <ScrollArea className="h-[50vh] w-full rounded-md border">
-                <Table>
-                  <TableHeader className="sticky top-0 bg-card">
-                    <TableRow>
-                      <TableHead className="w-[40%]">Field Name</TableHead>
-                      <TableHead>Value</TableHead>
-                      <TableHead className="w-[50px] text-right">Action</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
+              <ScrollArea className="h-[50vh] w-full rounded-md border p-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
                     {Object.entries(masterData).map(([key, value]) => (
-                      <TableRow key={key}>
-                        <TableCell>
-                          <Input
-                            value={key}
-                            onChange={(e) => handleFieldChange(key, e.target.value, value)}
-                            placeholder="Field Name"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Input
-                            value={value}
-                            onChange={(e) => handleValueChange(key, e.target.value)}
-                            placeholder="Value"
-                          />
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button variant="ghost" size="icon" onClick={() => handleRemoveField(key)}>
+                      <div key={key} className="space-y-2 relative group">
+                        <div className="grid grid-cols-2 gap-2">
+                           <div>
+                            <Label htmlFor={`field-name-${key}`} className="text-xs text-muted-foreground">Field Name</Label>
+                             <Input
+                                id={`field-name-${key}`}
+                                value={key}
+                                onChange={(e) => handleFieldChange(key, e.target.value)}
+                                placeholder="Field Name"
+                                className="font-semibold"
+                            />
+                           </div>
+                           <div>
+                             <Label htmlFor={`field-value-${key}`} className="text-xs text-muted-foreground">Value</Label>
+                             <Input
+                                id={`field-value-${key}`}
+                                value={value}
+                                onChange={(e) => handleValueChange(key, e.target.value)}
+                                placeholder="Value"
+                            />
+                           </div>
+                        </div>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleRemoveField(key)}
+                            className="absolute -top-2 -right-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                            aria-label="Remove field"
+                        >
                             <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
+                        </Button>
+                      </div>
                     ))}
-                  </TableBody>
-                </Table>
+                </div>
               </ScrollArea>
             )}
              <Button variant="outline" onClick={handleAddField}>
@@ -236,5 +242,3 @@ export default function ProfilePage() {
     </main>
   );
 }
-
-    
