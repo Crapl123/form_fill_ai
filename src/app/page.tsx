@@ -3,7 +3,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { ArrowRight, Bot, Feather, FileCheck, FileText, Lock, Moon, Sun, Users, Zap } from "lucide-react";
+import { ArrowRight, Bot, Feather, FileCheck, FileText, Lock, Moon, Sun, Users, Zap, LogOut, User as UserIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import FormFillerApp from "@/app/form-filler-app";
 import { useTheme } from "next-themes";
@@ -14,6 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/context/AuthContext";
+import { Loader } from "lucide-react";
 
 const FeatureCard = ({ icon, title, description }) => (
   <div className="flex flex-col items-start p-6 bg-card rounded-lg border border-border hover:border-primary/20 transition-colors">
@@ -72,10 +73,35 @@ const ThemeToggle = () => {
   );
 }
 
-export default function LandingPage() {
-  const { user } = useAuth();
+function LoggedInHeader() {
+    const { signOut } = useAuth();
+    return (
+      <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-sm border-b border-border">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
+          <div className="flex items-center gap-2">
+            <Bot className="h-7 w-7 text-primary" />
+            <span className="font-bold text-xl text-foreground">Form AutoFill AI</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <Link href="/profile">
+              <Button variant="ghost" size="icon" title="Profile" className="text-muted-foreground hover:text-foreground hover:bg-secondary">
+                  <UserIcon className="h-5 w-5" />
+              </Button>
+            </Link>
+            <Button variant="ghost" size="icon" onClick={signOut} title="Sign Out" className="text-muted-foreground hover:text-foreground hover:bg-secondary">
+              <LogOut className="h-5 w-5" />
+            </Button>
+          </div>
+        </div>
+      </header>
+    );
+}
 
-  return (
+
+function LoggedOutLandingPage() {
+    const { user } = useAuth();
+    return (
     <main className="bg-background text-foreground font-body antialiased">
       {/* Header */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-sm border-b border-border">
@@ -223,4 +249,28 @@ export default function LandingPage() {
   );
 }
 
+
+export default function Page() {
+    const { user, loading } = useAuth();
     
+    if (loading) {
+        return (
+            <div className="flex min-h-screen flex-col items-center justify-center bg-background">
+                <Loader className="h-12 w-12 animate-spin text-primary" />
+            </div>
+        )
+    }
+
+    if (user) {
+        return (
+            <main className="bg-background text-foreground font-body antialiased">
+                <LoggedInHeader />
+                <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                     <FormFillerApp />
+                </div>
+            </main>
+        )
+    }
+
+    return <LoggedOutLandingPage />;
+}

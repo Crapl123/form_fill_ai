@@ -587,7 +587,7 @@ function FormFiller({ masterData, onMasterDataUpdate, isTrial = false }) {
 
 
 export default function FormFillerApp() {
-  const { user, loading: authLoading, signOut } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
   const [masterData, setMasterData] = useState<Record<string, string> | null>(null);
@@ -618,11 +618,6 @@ export default function FormFillerApp() {
     }
   }, [user, authLoading, toast]);
 
-  const handleSignOut = async () => {
-    await signOut();
-    setMasterData(null);
-    router.push('/');
-  };
 
   const renderContent = () => {
     // Show a loader while checking authentication or fetching data
@@ -655,7 +650,7 @@ export default function FormFillerApp() {
 
   return (
       <Card className="w-full max-w-4xl mx-auto shadow-2xl bg-card border-border text-foreground">
-        <CardHeader className="text-center relative">
+        <CardHeader className="text-center">
           <div className="mx-auto bg-primary/10 text-primary rounded-full p-3 w-fit mb-4 border border-primary/20">
             <Wand2 className="h-8 w-8" />
           </div>
@@ -663,23 +658,9 @@ export default function FormFillerApp() {
           <CardDescription className="text-base max-w-2xl mx-auto text-muted-foreground">
             Upload your form below to see the AI in action.
           </CardDescription>
-          {user && (
-            <div className="absolute top-4 right-4 flex items-center gap-2">
-              <Link href="/profile">
-                <Button variant="ghost" size="icon" title="Profile" className="text-muted-foreground hover:text-foreground hover:bg-secondary">
-                    <UserIcon className="h-5 w-5" />
-                </Button>
-              </Link>
-              <Button variant="ghost" size="icon" onClick={handleSignOut} title="Sign Out" className="text-muted-foreground hover:text-foreground hover:bg-secondary">
-                <LogOut className="h-5 w-5" />
-              </Button>
-            </div>
-          )}
         </CardHeader>
         
         {renderContent()}
       </Card>
   );
 }
-
-    
