@@ -86,14 +86,13 @@ export default function ProfilePage() {
     setMasterData(prev => {
         if (!prev) return null;
 
-        // Check if newKey already exists and it's not the same as oldKey
         if (newKey !== oldKey && newKey in prev) {
             toast({
                 variant: "destructive",
                 title: "Duplicate Field Name",
                 description: "Field names must be unique. Please choose a different name."
             });
-            return prev; // Return original state to prevent the change
+            return prev; 
         }
 
         const entries = Object.entries(prev);
@@ -137,7 +136,16 @@ export default function ProfilePage() {
     if (!user || !masterData) return;
     setIsSaving(true);
     try {
-      await saveMasterData(user.uid, masterData);
+      // Filter out empty keys before saving
+      const dataToSave = Object.entries(masterData).reduce((acc, [key, value]) => {
+        if (key.trim()) {
+          acc[key.trim()] = value;
+        }
+        return acc;
+      }, {});
+
+      await saveMasterData(user.uid, dataToSave);
+      setMasterData(dataToSave); // Update state to reflect trimmed keys
       toast({
         title: "Success!",
         description: "Your master data has been saved.",
@@ -162,7 +170,7 @@ export default function ProfilePage() {
   }
   
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-4 sm:p-8">
+    <main className="flex min-h-screen flex-col items-center justify-start p-4 sm:p-8">
       <Card className="w-full max-w-4xl shadow-2xl">
         <CardHeader>
           <div className="flex justify-between items-center">
@@ -188,51 +196,48 @@ export default function ProfilePage() {
                 </Alert>
             )}
             {masterData && (
-              <ScrollArea className="h-[50vh] w-full rounded-md border p-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-                    {Object.entries(masterData).map(([key, value]) => (
-                      <div key={key} className="space-y-2 relative group">
-                        <div className="grid grid-cols-2 gap-2">
-                           <div>
-                            <Label htmlFor={`field-name-${key}`} className="text-xs text-muted-foreground">Field Name</Label>
-                             <Input
-                                id={`field-name-${key}`}
-                                value={key}
-                                onChange={(e) => handleFieldChange(key, e.target.value)}
-                                placeholder="Field Name"
-                                className="font-semibold"
-                            />
-                           </div>
-                           <div>
-                             <Label htmlFor={`field-value-${key}`} className="text-xs text-muted-foreground">Value</Label>
-                             <Input
-                                id={`field-value-${key}`}
-                                value={value}
-                                onChange={(e) => handleValueChange(key, e.target.value)}
-                                placeholder="Value"
-                            />
-                           </div>
-                        </div>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleRemoveField(key)}
-                            className="absolute -top-2 -right-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                            aria-label="Remove field"
-                        >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
-                    ))}
+              <ScrollArea className="h-[50vh] w-full">
+                <div className="space-y-4 pr-4">
+                  {/* Header */}
+                  <div className="grid grid-cols-2 md:grid-cols-[1fr_1fr_auto] items-center gap-4 px-2 pb-2 border-b">
+                      <Label className="text-muted-foreground">Field Name</Label>
+                      <Label className="text-muted-foreground">Value</Label>
+                      <div className="w-8 h-8"/> {/* Placeholder for alignment */}
+                  </div>
+                  {/* Rows */}
+                  {Object.entries(masterData).map(([key, value]) => (
+                    <div key={key} className="grid grid-cols-2 md:grid-cols-[1fr_1fr_auto] items-center gap-4 group">
+                      <Input
+                          value={key}
+                          onChange={(e) => handleFieldChange(key, e.target.value)}
+                          placeholder="Field Name"
+                          className="font-semibold"
+                      />
+                      <Input
+                          value={value}
+                          onChange={(e) => handleValueChange(key, e.target.value)}
+                          placeholder="Value"
+                      />
+                      <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleRemoveField(key)}
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                          aria-label="Remove field"
+                      >
+                          <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
                 </div>
               </ScrollArea>
             )}
-             <Button variant="outline" onClick={handleAddField}>
-                <PlusCircle className="mr-2 h-4 w-4" />
-                Add Field
-             </Button>
         </CardContent>
-        <CardFooter className="flex justify-end">
+        <CardFooter className="flex justify-between items-center border-t pt-6">
+           <Button variant="outline" onClick={handleAddField}>
+              <PlusCircle className="mr-2 h-4 w-4" />
+              Add Field
+           </Button>
           <Button onClick={handleSaveChanges} disabled={isSaving || !masterData}>
             {isSaving ? <Loader className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
             {isSaving ? "Saving..." : "Save Changes"}
