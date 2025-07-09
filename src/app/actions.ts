@@ -46,7 +46,7 @@ function createErrorState(error: unknown): FormState {
         debugInfo = error.stack || error.message;
 
         // Add more specific, user-friendly messages for common AI/API issues
-        if (message.includes('API key not found')) {
+        if (message.includes('API key not found') || message.includes('No model found')) {
             message = 'The AI service failed. Please ensure your GOOGLE_API_KEY is set correctly in your .env file.';
         } else if (message.includes('The model is overloaded')) {
             message = 'The AI model is temporarily overloaded. Please try again in a few moments.';
