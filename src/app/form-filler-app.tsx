@@ -605,9 +605,7 @@ function FormFiller({ masterData, onMasterDataUpdate, isTrial = false }) {
   const { toast } = useToast();
   const [processState, processAction, isProcessing] = useActionState(processForm, initialProcessState);
   const [vendorFormFile, setVendorFormFile] = useState<File | null>(null);
-  const [directDownloadUrl, setDirectDownloadUrl] = useState<string | null>(null);
   const [trialUsed, setTrialUsed] = useState(false);
-  
   const [trialMasterData, setTrialMasterData] = useState<Record<string, string> | null>(null);
   
   const currentMasterData = isTrial ? trialMasterData : masterData;
@@ -621,19 +619,9 @@ function FormFiller({ masterData, onMasterDataUpdate, isTrial = false }) {
       });
     }
 
-    if (processState.status === "preview" && processState.fileData && processState.mimeType) {
-      if (isTrial) {
-        setTrialUsed(true);
-      }
-      const byteCharacters = atob(processState.fileData);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
-      }
-      const byteArray = new Uint8Array(byteNumbers);
-      const blob = new Blob([byteArray], { type: processState.mimeType });
-      const url = URL.createObjectURL(blob);
-      setDirectDownloadUrl(url); 
+    // When the form processing is successful in a trial, set the trialUsed flag
+    if (isTrial && processState.status === "preview") {
+      setTrialUsed(true);
     }
   }, [processState, toast, isTrial]);
   
@@ -643,7 +631,6 @@ function FormFiller({ masterData, onMasterDataUpdate, isTrial = false }) {
       const isValid = selectedFile && (selectedFile.name.endsWith(".xlsx") || selectedFile.name.endsWith(".pdf"));
       if (isValid) {
         setVendorFormFile(selectedFile);
-        setDirectDownloadUrl(null);
         if (processState.status !== 'idle') {
           Object.assign(processState, initialProcessState);
         }
@@ -660,13 +647,13 @@ function FormFiller({ masterData, onMasterDataUpdate, isTrial = false }) {
 
   const resetFormFill = () => {
       setVendorFormFile(null);
-      setDirectDownloadUrl(null);
       Object.assign(processState, initialProcessState);
       if(isTrial) {
         setTrialUsed(false);
       }
   }
 
+  // Gated success screen for trial users
   if (isTrial && trialUsed) {
     return (
         <CardContent className="text-center pt-6">
@@ -674,16 +661,11 @@ function FormFiller({ masterData, onMasterDataUpdate, isTrial = false }) {
                 <CheckCircle2 className="h-4 w-4" />
                 <AlertTitle className="text-foreground">Trial Successful!</AlertTitle>
                 <AlertDescription className="text-muted-foreground">
-                    <p className="mb-4">Your form has been processed! To save your master data and fill unlimited forms, please sign up.</p>
+                    <p className="mb-4">Your form has been processed! To download or make corrections, please sign up.</p>
                     <div className="flex justify-center gap-2">
                          <Link href="/login" passHref>
                             <Button>Sign Up / Login</Button>
                          </Link>
-                         {directDownloadUrl && (
-                             <a href={directDownloadUrl} download={processState.fileName}>
-                                <Button variant="secondary">Download Filled Form</Button>
-                             </a>
-                         )}
                     </div>
                 </AlertDescription>
             </Alert>
@@ -691,10 +673,12 @@ function FormFiller({ masterData, onMasterDataUpdate, isTrial = false }) {
     );
   }
 
+  // Step 1 for trial users: provide data
   if (isTrial && !currentMasterData) {
     return <TrialDataSetup onDataReady={setTrialMasterData} />;
   }
 
+  // Step 2 for trial users OR the main UI for logged-in users, if not in preview.
   if (processState.status !== 'preview') {
     return (
       <form action={processAction}>
@@ -739,6 +723,7 @@ function FormFiller({ masterData, onMasterDataUpdate, isTrial = false }) {
     );
   }
 
+  // This is the preview/correction screen, only shown to LOGGED-IN users.
   return (
     <CardContent className="space-y-4 pt-6">
       <Alert className="bg-secondary/50 border-border text-muted-foreground">
@@ -794,16 +779,6 @@ function FormFiller({ masterData, onMasterDataUpdate, isTrial = false }) {
         onBack={resetFormFill}
       />
       
-      <CardFooter className="flex-col gap-4 px-0 pb-0 pt-4">
-        {directDownloadUrl && (
-           <a href={directDownloadUrl} download={processState.fileName} className="w-full">
-             <Button className="w-full" size="lg" variant="outline">
-               <Download className="mr-2 h-4 w-4" />
-               Download Initial Filled Form
-             </Button>
-           </a>
-        )}
-      </CardFooter>
     </CardContent>
   );
 }
@@ -885,5 +860,3 @@ export default function FormFillerApp() {
       </Card>
   );
 }
-
-    
