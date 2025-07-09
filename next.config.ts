@@ -1,3 +1,4 @@
+
 import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
@@ -17,6 +18,11 @@ const nextConfig: NextConfig = {
         pathname: '/**',
       },
     ],
+  },
+  experimental: {
+    // This allows the Next.js dev server to accept requests from the
+    // Firebase Studio environment.
+    allowedDevOrigins: ["*.cloudworkstations.dev"],
   },
 };
 
