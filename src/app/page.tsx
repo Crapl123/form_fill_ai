@@ -1,668 +1,182 @@
 
 "use client";
 
-import React, { useEffect, useState, useActionState, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import React from "react";
 import Link from "next/link";
-import ExcelJS from "exceljs";
-import { useAuth } from "@/context/AuthContext";
-import { getMasterData, saveMasterData } from "@/lib/firestore";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  CardFooter,
-} from "@/components/ui/card";
+import { ArrowRight, Bot, Feather, FileCheck, FileText, Lock, Users, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  CloudUpload,
-  FileCheck,
-  Loader,
-  AlertCircle,
-  Download,
-  FileSpreadsheet,
-  Zap,
-  CheckCircle2,
-  Database,
-  ListChecks,
-  ArrowRight,
-  Wand2,
-  FileEdit,
-  RefreshCw,
-  HelpCircle,
-  BookUp,
-  LogOut,
-  User as UserIcon,
-  Pencil,
-  ArrowLeft,
-} from "lucide-react";
-import { Progress } from "@/components/ui/progress";
-import { Textarea } from "@/components/ui/textarea";
-import { processForm, applyCorrections, FormState } from "./actions";
-import { useToast } from "@/hooks/use-toast";
+import FormFillerApp from "@/app/form-filler-app";
 
-const initialProcessState: FormState = {
-  status: "idle",
-  message: "",
-  fileData: null,
-  fileName: "",
-  mimeType: "",
-  debugInfo: undefined,
-  previewData: [],
-  missingFields: [],
-};
+const FeatureCard = ({ icon, title, description }) => (
+  <div className="flex flex-col items-start p-6 bg-slate-800/50 rounded-lg border border-slate-700/50 hover:border-slate-600 transition-colors">
+    <div className="mb-4 p-3 bg-indigo-500/10 text-indigo-400 rounded-lg border border-indigo-500/20">
+      {icon}
+    </div>
+    <h3 className="font-bold text-lg text-slate-100 mb-2">{title}</h3>
+    <p className="text-slate-400 leading-relaxed">{description}</p>
+  </div>
+);
 
-const FileUploadDropzone = ({ file, onFileChange, icon, title, description, inputId, accept, ...props }) => {
-  return (
-    <label htmlFor={inputId} className="cursor-pointer">
-      <div className="flex flex-col items-center justify-center space-y-2 rounded-lg border-2 border-dashed p-10 text-center transition hover:border-primary">
-        {file ? (
-          <>
-            <FileCheck className="h-10 w-10 text-green-500" />
-            <p className="font-semibold">{file.name}</p>
-            <p className="text-xs text-muted-foreground">Click or drag to change file</p>
-          </>
-        ) : (
-          <>
+const HowItWorksStep = ({ icon, title, description }) => (
+    <div className="flex flex-col items-center text-center p-6 bg-slate-800/50 rounded-lg border border-slate-700/50">
+        <div className="mb-4 p-3 bg-indigo-500/10 text-indigo-400 rounded-lg border border-indigo-500/20">
             {icon}
-            <p className="font-semibold">{title}</p>
-            <p className="text-xs text-muted-foreground">{description}</p>
-          </>
-        )}
-      </div>
-      <Input
-        id={inputId}
-        name={inputId}
-        type="file"
-        className="sr-only"
-        onChange={onFileChange}
-        accept={accept}
-        {...props}
-      />
-    </label>
-  )
-}
+        </div>
+        <h3 className="font-semibold text-lg text-slate-100">{title}</h3>
+        <p className="text-slate-400 text-sm">{description}</p>
+    </div>
+);
 
-function CorrectionForm({ processState, masterData, onMasterDataUpdate, onBack }) {
-  const { toast } = useToast();
-  const { user } = useAuth();
-  const [correctionState, correctionAction, isSubmittingCorrections] = useActionState(applyCorrections, initialProcessState);
-  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
-  const [updatedMasterDataUrl, setUpdatedMasterDataUrl] = useState<string | null>(null);
+const TestimonialCard = ({ quote, author, role }) => (
+    <div className="p-6 bg-slate-800/50 rounded-lg border border-slate-700/50">
+        <blockquote className="text-slate-300 italic mb-4">“{quote}”</blockquote>
+        <div className="text-right">
+            <p className="font-semibold text-slate-100">{author}</p>
+            <p className="text-sm text-indigo-400">{role}</p>
+        </div>
+    </div>
+)
 
-  const uniqueMissingFields = useMemo(() => {
-    if (!processState.missingFields) return [];
-    const seen = new Set();
-    return processState.missingFields.filter(item => {
-      const duplicate = seen.has(item.targetCell);
-      seen.add(item.targetCell);
-      return !duplicate;
-    });
-  }, [processState.missingFields]);
-
-  useEffect(() => {
-    if (correctionState.status === "error") {
-      toast({
-        variant: "destructive",
-        title: "An Error Occurred",
-        description: correctionState.message,
-      });
-    }
-
-    if (correctionState.status === "success" && correctionState.fileData && correctionState.mimeType) {
-      toast({
-        variant: "default",
-        title: "Success!",
-        description: "Your files are ready for download.",
-      });
-      
-      const createUrl = (fileData: string, mimeType: string) => {
-        const byteCharacters = atob(fileData);
-        const byteNumbers = new Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) {
-          byteNumbers[i] = byteCharacters.charCodeAt(i);
-        }
-        const byteArray = new Uint8Array(byteNumbers);
-        const blob = new Blob([byteArray], { type: mimeType });
-        return URL.createObjectURL(blob);
-      }
-
-      setDownloadUrl(createUrl(correctionState.fileData, correctionState.mimeType));
-      
-      if (correctionState.updatedMasterData) {
-        setUpdatedMasterDataUrl(createUrl(correctionState.updatedMasterData, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
-      }
-
-      if (correctionState.updatedMasterDataJSON && user) {
-        onMasterDataUpdate(correctionState.updatedMasterDataJSON);
-        saveMasterData(user.uid, correctionState.updatedMasterDataJSON);
-        toast({
-          variant: "default",
-          title: "Master Data Updated",
-          description: "Your data has been saved for future use.",
-        });
-      }
-    }
-  }, [correctionState, toast, onMasterDataUpdate, user]);
-
+export default function LandingPage() {
   return (
-    <form action={correctionAction} className="space-y-6">
-      <input type="hidden" name="fileData" value={processState.fileData ?? ""} />
-      <input type="hidden" name="fileName" value={processState.fileName ?? ""} />
-      <input type="hidden" name="mimeType" value={processState.mimeType ?? ""} />
-      <input type="hidden" name="masterData" value={JSON.stringify(masterData ?? {})} />
-      <input type="hidden" name="missingFields" value={JSON.stringify(uniqueMissingFields ?? [])} />
-
-      
-      {uniqueMissingFields && uniqueMissingFields.length > 0 && (
-          <div className="space-y-4 rounded-lg border border-yellow-500/50 bg-yellow-500/10 p-4">
-              <div className="flex items-center gap-2">
-                 <HelpCircle className="h-5 w-5 text-yellow-600" />
-                 <h3 className="font-semibold text-yellow-800 dark:text-yellow-300">Missing Information</h3>
-              </div>
-              <p className="text-sm text-muted-foreground">The AI identified these fields in the form but couldn't find matching data. Please provide the values below to improve future results.</p>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {uniqueMissingFields.map(item => (
-                    <div className="space-y-2" key={item.targetCell}>
-                        <Label htmlFor={`missing_${item.targetCell}`}>{item.labelGuessed}</Label>
-                        <Input 
-                            id={`missing_${item.targetCell}`}
-                            name={`missing_${item.targetCell}`}
-                            placeholder={`Enter value for ${item.labelGuessed}...`}
-                        />
-                    </div>
-                ))}
-              </div>
+    <main className="bg-slate-900 text-slate-300 font-body antialiased">
+      {/* Header */}
+      <header className="fixed top-0 left-0 right-0 z-50 bg-slate-900/80 backdrop-blur-sm border-b border-slate-800">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
+          <div className="flex items-center gap-2">
+            <Bot className="h-7 w-7 text-indigo-400" />
+            <span className="font-bold text-xl text-white">Form AutoFill AI</span>
           </div>
-      )}
-
-      <div>
-          <h3 className="mb-2 font-semibold">Make Text-based Corrections (Optional)</h3>
-          <Textarea
-            name="correctionRequest"
-            placeholder="e.g., Change the value in B5 to 'Completed'. Remove the value from C10."
-            className="min-h-[100px]"
-          />
-      </div>
-
-      {isSubmittingCorrections && (
-        <Progress value={50} className="w-full" />
-      )}
-
-      {correctionState.status === "error" && correctionState.message && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Correction Error</AlertTitle>
-          <AlertDescription>{correctionState.message}</AlertDescription>
-        </Alert>
-      )}
-
-      <div className="flex flex-col gap-2">
-        {downloadUrl ? (
-          <div className="flex flex-col gap-2">
-            <a href={downloadUrl} download={correctionState.fileName} className="w-full">
-              <Button className="w-full" size="lg" variant="default" type="button">
-                <Download className="mr-2 h-4 w-4" />
-                Download Corrected Form
+          <div className="flex items-center gap-2">
+            <Link href="/login" passHref>
+              <Button variant="ghost" className="text-slate-300 hover:text-white hover:bg-slate-800">Login</Button>
+            </Link>
+            <Link href="/login" passHref>
+              <Button variant="default" className="bg-indigo-600 text-white hover:bg-indigo-500">
+                Sign Up <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
-            </a>
-            {updatedMasterDataUrl && (
-                <a href={updatedMasterDataUrl} download={correctionState.updatedMasterDataFileName} className="w-full">
-                    <Button className="w-full" size="lg" variant="secondary" type="button">
-                    <BookUp className="mr-2 h-4 w-4" />
-                    Download Updated Master Data
-                    </Button>
-                </a>
-            )}
+            </Link>
           </div>
-        ) : (
-          <Button type="submit" className="w-full" size="lg" disabled={isSubmittingCorrections}>
-            {isSubmittingCorrections ? <><Loader className="mr-2 h-4 w-4 animate-spin" /> Applying Changes...</> : <><Wand2 className="mr-2 h-4 w-4" /> Apply Changes & Download</>}
-          </Button>
-        )}
-      </div>
-
-       <Button variant="outline" onClick={onBack} className="w-full">
-          <ArrowLeft className="mr-2 h-4 w-4"/>
-          Back to Upload
-       </Button>
-    </form>
-  )
-}
-
-function InitialSetup({ onSetupComplete }) {
-  const { toast } = useToast();
-  const { user } = useAuth();
-  const router = useRouter();
-  const [setupMode, setSetupMode] = useState<"choice" | "upload" | "manual">("choice");
-  const [masterDataFile, setMasterDataFile] = useState<File | null>(null);
-  
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const selectedFile = e.target.files[0];
-      const isValid = selectedFile && (selectedFile.name.endsWith(".xlsx") || selectedFile.name.endsWith(".csv"));
-      if (isValid) {
-        handleParse(selectedFile);
-      } else {
-        toast({
-          variant: "destructive",
-          title: "Invalid File Type",
-          description: "Please upload a valid .xlsx or .csv file.",
-        });
-      }
-    }
-  };
-  
-  const parseCsv = (file: File): Promise<Record<string, string>> => {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            const text = event.target?.result as string;
-            const data: Record<string, string> = {};
-            const rows = text.split(/\r?\n/);
-            rows.forEach(row => {
-                const columns = row.split(',');
-                if (columns.length >= 2) {
-                    const key = columns[0].trim();
-                    const value = columns.slice(1).join(',').trim();
-                    if(key) data[key] = value;
-                }
-            });
-            if(Object.keys(data).length === 0) {
-              reject(new Error("Could not parse any data. Ensure the CSV has at least two columns: key, value."));
-            } else {
-              resolve(data);
-            }
-        };
-        reader.onerror = () => reject(new Error("Failed to read file."));
-        reader.readAsText(file);
-    });
-  }
-  
-  const parseXlsx = async (file: File): Promise<Record<string, string>> => {
-    const workbook = new ExcelJS.Workbook();
-    const buffer = await file.arrayBuffer();
-    await workbook.xlsx.load(buffer);
-    const worksheet = workbook.worksheets[0];
-    if (!worksheet) throw new Error("No worksheet found.");
-
-    const data: Record<string, string> = {};
-    worksheet.eachRow({ includeEmpty: false }, (row) => {
-      const keyCell = row.getCell(1);
-      const valueCell = row.getCell(2);
-      const key = keyCell.text?.trim();
-      if (key) {
-        data[key] = valueCell.text?.trim() || "";
-      }
-    });
-
-    if(Object.keys(data).length === 0) {
-      throw new Error("Could not parse any data. Ensure the first column has keys and the second has values.");
-    }
-    return data;
-  }
-
-  const handleParse = async (file: File) => {
-    if (!file || !user) return;
-    try {
-      let data: Record<string, string>;
-      if (file.name.endsWith('.csv')) {
-          data = await parseCsv(file);
-      } else {
-          data = await parseXlsx(file);
-      }
-      
-      await saveMasterData(user.uid, data);
-      onSetupComplete(data);
-      toast({ title: "Success!", description: "Your master data has been saved from the sheet." });
-
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "An unknown error occurred.";
-      toast({ variant: "destructive", title: "Parsing Failed", description: message });
-    }
-  };
-  
-  const handleStartManually = () => {
-    router.push('/profile');
-  };
-
-  if (setupMode === 'choice') {
-    return (
-       <CardContent className="space-y-4 pt-6">
-        <Alert>
-          <Database className="h-4 w-4" />
-          <AlertTitle>Welcome! Let's get your data setup.</AlertTitle>
-          <AlertDescription>
-            You can upload an Excel/CSV sheet with your master data, or enter it manually.
-          </AlertDescription>
-        </Alert>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Button variant="outline" size="lg" className="h-auto py-6 flex flex-col gap-2 hover:bg-accent/50" onClick={() => setSetupMode('upload')}>
-                <CloudUpload className="h-8 w-8"/>
-                <span>Upload Master Sheet</span>
-                <span className="text-xs font-normal text-muted-foreground">(.xlsx or .csv)</span>
-            </Button>
-            <Button variant="outline" size="lg" className="h-auto py-6 flex flex-col gap-2 hover:bg-accent/50" onClick={handleStartManually}>
-                <Pencil className="h-8 w-8"/>
-                <span>Enter Data Manually</span>
-                <span className="text-xs font-normal text-muted-foreground">We'll start you with some common fields.</span>
-            </Button>
         </div>
-      </CardContent>
-    );
-  }
+      </header>
 
-  if (setupMode === 'upload') {
-     return (
-      <CardContent className="space-y-4 pt-6">
-        <FileUploadDropzone
-          file={masterDataFile}
-          onFileChange={handleFileChange}
-          icon={<Database className="h-10 w-10 text-muted-foreground" />}
-          title="Upload Master Data Sheet"
-          description="Excel (.xlsx) or CSV (.csv) files only"
-          inputId="master-data-upload"
-          accept=".xlsx, .csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, text/csv"
-        />
-        <Button onClick={() => setSetupMode('choice')} variant="link">Back to options</Button>
-      </CardContent>
-    );
-  }
-  
-  return null;
-}
-
-
-function FormFiller({ masterData, onMasterDataUpdate }) {
-  const { toast } = useToast();
-  const [processState, processAction, isProcessing] = useActionState(processForm, initialProcessState);
-  const [vendorFormFile, setVendorFormFile] = useState<File | null>(null);
-  const [directDownloadUrl, setDirectDownloadUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (processState.status === "error") {
-      toast({
-        variant: "destructive",
-        title: "An Error Occurred",
-        description: processState.message,
-      });
-    }
-
-    if (processState.status === "preview" && processState.fileData && processState.mimeType) {
-      const byteCharacters = atob(processState.fileData);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
-      }
-      const byteArray = new Uint8Array(byteNumbers);
-      const blob = new Blob([byteArray], { type: processState.mimeType });
-      const url = URL.createObjectURL(blob);
-      setDirectDownloadUrl(url); 
-    }
-  }, [processState, toast]);
-  
-  const handleVendorFormFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const selectedFile = e.target.files[0];
-      const isValid = selectedFile && (selectedFile.name.endsWith(".xlsx") || selectedFile.name.endsWith(".pdf"));
-      if (isValid) {
-        setVendorFormFile(selectedFile);
-        setDirectDownloadUrl(null);
-        if (processState.status !== 'idle') {
-          Object.assign(processState, initialProcessState);
-        }
-      } else {
-        setVendorFormFile(null);
-        toast({
-          variant: "destructive",
-          title: "Invalid File Type",
-          description: "Please upload a valid .xlsx or .pdf file.",
-        });
-      }
-    }
-  };
-
-  const resetFormFill = () => {
-      setVendorFormFile(null);
-      setDirectDownloadUrl(null);
-      Object.assign(processState, initialProcessState);
-  }
-
-  if (processState.status !== 'preview') {
-    return (
-      <form action={processAction}>
-        <CardContent className="space-y-6 pt-6">
-          <input type="hidden" name="masterData" value={JSON.stringify(masterData ?? {})} />
-          <FileUploadDropzone
-              file={vendorFormFile}
-              onFileChange={handleVendorFormFileChange}
-              icon={<CloudUpload className="h-10 w-10 text-muted-foreground" />}
-              title="Upload Form To Fill"
-              description="Excel or PDF files only (.xlsx, .pdf)"
-              inputId="file"
-              name="file"
-              required
-              accept=".xlsx, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, .pdf, application/pdf"
-          />
-          
-          {isProcessing && (
-            <div className="space-y-2">
-               <div className="flex items-center gap-3 text-primary">
-                  <Loader className="h-5 w-5 animate-spin text-accent" />
-                  <span className="font-medium">AI is analyzing and filling your form...</span>
-               </div>
-               <Progress value={50} className="w-full" />
-            </div>
-          )}
-          
-          {processState.status === "error" && processState.message && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertTitle>Error</AlertTitle>
-              <AlertDescription>{processState.message}</AlertDescription>
-            </Alert>
-          )}
-        </CardContent>
-        <CardFooter>
-          <Button type="submit" disabled={isProcessing || !vendorFormFile} className="w-full" size="lg">
-              {isProcessing ? <><Loader className="mr-2 h-4 w-4 animate-spin" /> Processing...</> : <><Zap className="mr-2 h-4 w-4" /> Auto-Fill Form</>}
-          </Button>
-        </CardFooter>
-      </form>
-    );
-  }
-
-  return (
-    <CardContent className="space-y-4 pt-6">
-      <Alert>
-        <FileEdit className="h-4 w-4" />
-        <AlertTitle>Preview, Fill & Correct</AlertTitle>
-        <AlertDescription>
-          The AI has filled what it can. Please provide any missing information and make corrections below.
-        </AlertDescription>
-      </Alert>
-
-      {processState.mimeType === 'application/pdf' && processState.fileData ? (
-        <div className="rounded-md border">
-          <iframe
-            src={`data:application/pdf;base64,${processState.fileData}`}
-            className="h-[600px] w-full"
-            title="PDF Preview"
-          />
-        </div>
-      ) : (
-        <div>
-            <h3 className="mb-2 font-semibold">AI Auto-Filled Data</h3>
-            <ScrollArea className="h-60 w-full rounded-md border">
-            <Table>
-                <TableHeader>
-                <TableRow>
-                    <TableHead>Guessed Label</TableHead>
-                    <TableHead>Cell Filled</TableHead>
-                    <TableHead>Value Filled</TableHead>
-                </TableRow>
-                </TableHeader>
-                <TableBody>
-                {processState.previewData?.length > 0 ? processState.previewData?.map((item) => (
-                    <TableRow key={item.cell}>
-                    <TableCell className="text-muted-foreground">{item.labelGuessed || 'N/A'}</TableCell>
-                    <TableCell className="font-mono">{item.cell}</TableCell>
-                    <TableCell className="font-medium">{item.value}</TableCell>
-                    </TableRow>
-                )) : (
-                    <TableRow>
-                        <TableCell colSpan={3} className="text-center text-muted-foreground">The AI could not fill any fields automatically.</TableCell>
-                    </TableRow>
-                )}
-                </TableBody>
-            </Table>
-            </ScrollArea>
-        </div>
-      )}
-      
-      <CorrectionForm 
-        processState={processState} 
-        masterData={masterData}
-        onMasterDataUpdate={onMasterDataUpdate}
-        onBack={resetFormFill}
-      />
-      
-      <CardFooter className="flex-col gap-4 px-0 pb-0 pt-4">
-        {directDownloadUrl && (
-           <a href={directDownloadUrl} download={processState.fileName} className="w-full">
-             <Button className="w-full" size="lg" variant="outline">
-               <Download className="mr-2 h-4 w-4" />
-               Download Initial Filled Form
-             </Button>
-           </a>
-        )}
-      </CardFooter>
-    </CardContent>
-  );
-}
-
-const HowItWorksStep = ({ icon, title, description }) => {
-    return (
-        <div className="flex flex-col items-center text-center">
-            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-                {icon}
-            </div>
-            <h3 className="font-semibold text-lg">{title}</h3>
-            <p className="text-muted-foreground text-sm">{description}</p>
-        </div>
-    );
-};
-
-
-export default function Home() {
-  const { user, loading: authLoading, signOut } = useAuth();
-  const router = useRouter();
-  const { toast } = useToast();
-  const [masterData, setMasterData] = useState<Record<string, string> | null>(null);
-  const [loadingData, setLoadingData] = useState(true);
-
-  useEffect(() => {
-    if (!authLoading) {
-      if (user) {
-        getMasterData(user.uid)
-          .then((data) => {
-            setMasterData(data);
-          })
-          .catch((error) => {
-            toast({
-              variant: "destructive",
-              title: "Could not load user data.",
-              description: error.message,
-            });
-          })
-          .finally(() => {
-            setLoadingData(false);
-          });
-      } else {
-        router.push("/login");
-      }
-    }
-  }, [user, authLoading, router, toast]);
-
-  const handleSignOut = async () => {
-    await signOut();
-    router.push('/login');
-  };
-
-  const renderContent = () => {
-    if (authLoading || loadingData) {
-      return (
-        <CardContent className="flex justify-center items-center h-64">
-          <Loader className="h-12 w-12 animate-spin text-primary" />
-        </CardContent>
-      );
-    }
-    
-    if (user && !masterData) {
-      return <InitialSetup onSetupComplete={setMasterData} />;
-    }
-
-    if (user && masterData) {
-      return <FormFiller masterData={masterData} onMasterDataUpdate={setMasterData} />;
-    }
-
-    return null;
-  }
-
-  return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-4 sm:p-8 bg-background">
-      <Card className="w-full max-w-4xl shadow-2xl">
-        <CardHeader className="text-center relative">
-          <div className="mx-auto bg-primary text-primary-foreground rounded-full p-3 w-fit mb-4">
-            <Wand2 className="h-8 w-8" />
-          </div>
-          <CardTitle className="text-3xl font-bold">Form AutoFill AI</CardTitle>
-          <CardDescription className="text-base max-w-2xl mx-auto">
-            Auto-fill any form - Excel or PDF - using your saved master data. Works with invoices, onboarding forms, registrations, and more.
-          </CardDescription>
-          {user && (
-            <div className="absolute top-4 right-4 flex items-center gap-2">
-              <Link href="/profile">
-                <Button variant="ghost" size="icon" title="Profile">
-                    <UserIcon className="h-5 w-5" />
-                </Button>
-              </Link>
-              <Button variant="ghost" size="icon" onClick={handleSignOut} title="Sign Out">
-                <LogOut className="h-5 w-5" />
+      {/* Hero Section */}
+      <section className="relative pt-32 pb-20 text-center container mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="absolute inset-0 -z-10 h-full w-full bg-slate-900 bg-[linear-gradient(to_right,#8080800a_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] bg-[size:14px_24px]"></div>
+        <div className="absolute left-0 top-0 -z-10 h-1/3 w-full bg-gradient-to-b from-indigo-950/50 to-transparent"></div>
+        <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight text-white mb-4">
+          Fill Complex Forms in Seconds with AI
+        </h1>
+        <p className="max-w-2xl mx-auto text-lg text-slate-400 mb-8">
+          Upload any supplier or vendor form (Excel or PDF) and get it filled instantly using your saved company data.
+        </p>
+        <div className="flex justify-center">
+            <Link href="#app" passHref>
+              <Button size="lg" className="bg-indigo-600 text-white hover:bg-indigo-500 text-base font-semibold px-8 py-6">
+                Try It Now <Zap className="ml-2 h-5 w-5"/>
               </Button>
+            </Link>
+        </div>
+      </section>
+
+      {/* How It Works */}
+      <section className="py-20 bg-slate-900/50">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+            <h2 className="text-3xl font-bold text-center text-white mb-12">How It Works</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <HowItWorksStep icon={<Feather className="h-7 w-7"/>} title="1. Add Master Data" description="Securely enter or upload your company's master data just once." />
+                <HowItWorksStep icon={<FileText className="h-7 w-7"/>} title="2. Upload Any Form" description="Drag and drop any structured supplier form, in Excel or PDF format." />
+                <HowItWorksStep icon={<FileCheck className="h-7 w-7"/>} title="3. Download Instantly" description="Review, correct, and download the auto-filled version in seconds." />
             </div>
-          )}
-        </CardHeader>
-        
-        {masterData && (
-          <CardContent>
-            <div className="my-6 rounded-lg border bg-card p-6">
-                <h2 className="text-xl font-semibold text-center mb-6">How It Works</h2>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                    <HowItWorksStep icon={<Pencil className="h-6 w-6"/>} title="1. Set Your Data" description="Enter or upload your master data just once on your profile." />
-                    <HowItWorksStep icon={<CloudUpload className="h-6 w-6"/>} title="2. Upload a Form" description="Upload any structured form (Excel or PDF)." />
-                    <HowItWorksStep icon={<FileCheck className="h-6 w-6"/>} title="3. Download" description="Review, correct, and download the auto-filled version instantly." />
+        </div>
+      </section>
+
+      {/* App Section */}
+      <section id="app" className="py-20">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+            <FormFillerApp />
+        </div>
+      </section>
+      
+      {/* Features Section */}
+      <section className="py-20 bg-slate-900/50">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+          <h2 className="text-3xl font-bold text-center text-white mb-12">Powerful Features, Simple Interface</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+            <FeatureCard
+              icon={<Bot className="h-7 w-7"/>}
+              title="Smart AI Autofill"
+              description="Our AI intelligently maps your data to the correct form fields, even with varied labels."
+            />
+            <FeatureCard
+              icon={<FileText className="h-7 w-7"/>}
+              title="Supports Excel & PDF"
+              description="Handle both modern fillable PDFs and traditional Excel spreadsheets with ease."
+            />
+            <FeatureCard
+              icon={<Zap className="h-7 w-7"/>}
+              title="Works on Unstructured Forms"
+              description="Our AI can identify fields and fill flat, non-fillable PDFs and unstructured Excel files."
+            />
+            <FeatureCard
+              icon={<Lock className="h-7 w-7"/>}
+              title="Privacy-Focused"
+              description="Your master data is stored securely and is never used for any other purpose."
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* Pricing Section */}
+      <section className="py-20">
+          <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="max-w-2xl mx-auto text-center">
+                 <h2 className="text-3xl font-bold text-white mb-4">Get Started for Free</h2>
+                 <p className="text-slate-400 mb-8">
+                    Try out the full power of the app with a generous free plan. Upgrade when you need more.
+                 </p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+                <div className="p-8 bg-slate-800/50 rounded-lg border border-slate-700 text-center">
+                    <h3 className="text-2xl font-bold text-white mb-2">Free</h3>
+                    <p className="text-slate-400 mb-6">For individuals and small-scale use</p>
+                    <p className="text-4xl font-bold text-white mb-6">1 <span className="text-lg font-medium text-slate-400">form fill / day</span></p>
+                    <Button variant="outline" className="w-full border-indigo-500 text-indigo-400 hover:bg-indigo-500 hover:text-white">Start for Free</Button>
                 </div>
-            </div>
-          </CardContent>
-        )}
-        
-        {renderContent()}
-      </Card>
+                 <div className="p-8 bg-slate-800/50 rounded-lg border border-indigo-500 text-center ring-2 ring-indigo-500/50">
+                    <h3 className="text-2xl font-bold text-white mb-2">Pro</h3>
+                    <p className="text-slate-400 mb-6">For teams and frequent users</p>
+                    <p className="text-4xl font-bold text-white mb-6">Unlimited <span className="text-lg font-medium text-slate-400">form fills</span></p>
+                    <Button variant="default" className="w-full bg-indigo-600 hover:bg-indigo-500 text-white">Subscribe to Pro</Button>
+                </div>
+              </div>
+          </div>
+      </section>
+
+      {/* Testimonials */}
+      <section className="py-20 bg-slate-900/50">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+          <h2 className="text-3xl font-bold text-center text-white mb-12">Loved by Teams Everywhere</h2>
+           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              <TestimonialCard quote="This tool saved our admin team hours every week. What used to be a manual copy-paste marathon is now a one-click process." author="Sarah J." role="Procurement Manager" />
+              <TestimonialCard quote="As a small business owner, I wear many hats. Form AutoFill AI took one of the most tedious tasks off my plate completely." author="Mike R." role="Founder, Creative Co." />
+              <TestimonialCard quote="The AI is surprisingly accurate, even on some of the weirdly formatted forms we get. It's become an essential part of our vendor onboarding." author="David L." role="Operations Lead, TechCorp" />
+           </div>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="border-t border-slate-800">
+        <div className="container mx-auto py-8 px-4 sm:px-6 lg:px-8 text-center text-slate-500">
+          <div className="flex justify-center gap-6 mb-4">
+            <Link href="#" className="hover:text-slate-300">About</Link>
+            <Link href="#" className="hover:text-slate-300">FAQ</Link>
+            <Link href="#" className="hover:text-slate-300">Contact</Link>
+            <Link href="#" className="hover:text-slate-300">Privacy Policy</Link>
+          </div>
+          <p>&copy; {new Date().getFullYear()} Form AutoFill AI. All rights reserved.</p>
+        </div>
+      </footer>
     </main>
   );
 }

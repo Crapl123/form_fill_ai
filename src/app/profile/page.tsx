@@ -247,26 +247,26 @@ export default function ProfilePage() {
 
   if (isLoading || authLoading) {
     return (
-      <main className="flex min-h-screen flex-col items-center justify-center p-4 sm:p-8">
-        <Loader className="h-12 w-12 animate-spin text-primary" />
+      <main className="flex min-h-screen flex-col items-center justify-center p-4 sm:p-8 bg-slate-900">
+        <Loader className="h-12 w-12 animate-spin text-indigo-500" />
       </main>
     );
   }
   
   return (
-    <main className="flex min-h-screen flex-col items-center justify-start p-4 sm:p-8 bg-background">
-      <Card className="w-full max-w-4xl shadow-2xl">
+    <main className="flex min-h-screen flex-col items-center justify-start p-4 sm:p-8 bg-slate-900">
+      <Card className="w-full max-w-4xl shadow-2xl bg-slate-800/40 border-slate-700/80 text-white">
         <CardHeader>
           <div className="flex justify-between items-center flex-wrap gap-4">
              <div>
                 <CardTitle className="text-3xl font-bold">Your Master Data</CardTitle>
-                <CardDescription className="text-base">
+                <CardDescription className="text-base text-slate-400">
                 Add, edit, or remove fields from your master data profile.
                 </CardDescription>
              </div>
              <div className="flex gap-2">
                 <label htmlFor="file-upload" className="cursor-pointer">
-                    <Button asChild variant="outline">
+                    <Button asChild variant="outline" className="border-slate-600 hover:bg-slate-700">
                         <span>
                             <Upload className="mr-2 h-4 w-4" /> Import from File
                         </span>
@@ -274,7 +274,7 @@ export default function ProfilePage() {
                     <Input id="file-upload" type="file" className="hidden" onChange={handleFileImport} accept=".csv, .xlsx, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"/>
                 </label>
                 <Link href="/" passHref>
-                    <Button>
+                    <Button className="bg-indigo-600 hover:bg-indigo-500">
                         <ArrowLeft className="mr-2 h-4 w-4" /> Back to App
                     </Button>
                 </Link>
@@ -292,9 +292,9 @@ export default function ProfilePage() {
             {masterData && (
               <ScrollArea className="h-[50vh] w-full">
                 <div className="space-y-4 pr-4">
-                  <div className="grid grid-cols-2 md:grid-cols-[1fr_1fr_auto] items-center gap-4 px-2 pb-2 border-b">
-                      <Label className="text-muted-foreground">Field Name</Label>
-                      <Label className="text-muted-foreground">Value</Label>
+                  <div className="grid grid-cols-2 md:grid-cols-[1fr_1fr_auto] items-center gap-4 px-2 pb-2 border-b border-slate-700">
+                      <Label className="text-slate-400">Field Name</Label>
+                      <Label className="text-slate-400">Value</Label>
                       <div className="w-8 h-8"/>
                   </div>
                   {Object.entries(masterData).map(([key, value]) => (
@@ -303,18 +303,19 @@ export default function ProfilePage() {
                           value={key}
                           onChange={(e) => handleFieldChange(key, e.target.value)}
                           placeholder="Field Name"
-                          className="font-semibold"
+                          className="font-semibold bg-slate-700/50 border-slate-600 text-slate-100"
                       />
                       <Input
                           value={value}
                           onChange={(e) => handleValueChange(key, e.target.value)}
                           placeholder={placeholderData[key] || "Value"}
+                          className="bg-slate-700/50 border-slate-600 text-slate-100"
                       />
                       <Button
                           variant="ghost"
                           size="icon"
                           onClick={() => handleRemoveField(key)}
-                          className="h-8 w-8 text-muted-foreground hover:text-destructive transition-colors"
+                          className="h-8 w-8 text-slate-500 hover:text-red-500 hover:bg-red-500/10 transition-colors"
                           aria-label="Remove field"
                       >
                           <Trash2 className="h-4 w-4" />
@@ -325,12 +326,12 @@ export default function ProfilePage() {
               </ScrollArea>
             )}
         </CardContent>
-        <CardFooter className="flex justify-between items-center border-t pt-6">
-           <Button variant="outline" onClick={handleAddField} className="hover:bg-accent/50">
+        <CardFooter className="flex justify-between items-center border-t border-slate-700 pt-6">
+           <Button variant="outline" onClick={handleAddField} className="border-slate-600 hover:bg-slate-700">
               <PlusCircle className="mr-2 h-4 w-4" />
               Add Field
            </Button>
-          <Button onClick={handleSaveChanges} disabled={isSaving || !masterData}>
+          <Button onClick={handleSaveChanges} disabled={isSaving || !masterData} className="bg-indigo-600 hover:bg-indigo-500">
             {isSaving ? <Loader className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
             {isSaving ? "Saving..." : "Save Changes"}
           </Button>
