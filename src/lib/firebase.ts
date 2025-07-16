@@ -17,16 +17,19 @@ let auth: Auth;
 let db: Firestore;
 
 // This check ensures Firebase is only initialized on the client-side (in the browser).
-// Vercel's build process runs on the server, where `window` is not defined.
+// This is crucial for builds on platforms like Vercel where server-side rendering
+// might not have access to a 'window' object.
 if (typeof window !== 'undefined' && !getApps().length) {
     app = initializeApp(firebaseConfig);
     auth = getAuth(app);
     db = getFirestore(app);
 } else if (getApps().length > 0) {
+    // If the app is already initialized, we get the existing instance.
     app = getApp();
     auth = getAuth(app);
     db = getFirestore(app);
 }
 
-// We export the initialized services. In a server-only environment, they will be undefined.
+// We export the initialized services. In a server-only build environment, they might be undefined,
+// which is handled by client-side components that use them.
 export { app, db, auth };
