@@ -1,4 +1,5 @@
-import { initializeApp, getApps, type FirebaseApp } from 'firebase/app';
+
+import { initializeApp, getApps, type FirebaseApp, getApp } from 'firebase/app';
 import { getFirestore, type Firestore } from 'firebase/firestore';
 import { getAuth, type Auth } from 'firebase/auth';
 
@@ -11,13 +12,15 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-let app: FirebaseApp;
-if (!getApps().length) {
-  app = initializeApp(firebaseConfig);
-} else {
-  app = getApps()[0];
+// This function ensures Firebase is initialized only once.
+function getFirebaseApp(): FirebaseApp {
+    if (getApps().length > 0) {
+        return getApp();
+    }
+    return initializeApp(firebaseConfig);
 }
 
+const app: FirebaseApp = getFirebaseApp();
 const db: Firestore = getFirestore(app);
 const auth: Auth = getAuth(app);
 
