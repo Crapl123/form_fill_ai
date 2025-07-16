@@ -283,6 +283,16 @@ export async function processForm(
         };
 
     } catch (error) {
+        // Specifically catch the "flat PDF" error and return a friendly message
+        if (error instanceof Error && error.message.includes("Processing for non-fillable (flat) PDFs is temporarily disabled")) {
+            return {
+                status: "error",
+                message: error.message,
+                fileData: null,
+                fileName: "",
+                mimeType: "",
+            };
+        }
         return createErrorState(error);
     }
 }
