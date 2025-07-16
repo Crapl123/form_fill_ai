@@ -17,12 +17,15 @@ let auth: Auth;
 let db: Firestore;
 
 // This check ensures Firebase is only initialized on the client-side (in the browser).
-// This is crucial for builds on platforms like Vercel where server-side rendering
-// might not have access to a 'window' object.
+// It also checks if the necessary environment variables are present before initializing.
 if (typeof window !== 'undefined' && !getApps().length) {
-    app = initializeApp(firebaseConfig);
-    auth = getAuth(app);
-    db = getFirestore(app);
+    if (firebaseConfig.apiKey) {
+        app = initializeApp(firebaseConfig);
+        auth = getAuth(app);
+        db = getFirestore(app);
+    } else {
+        console.error("Firebase API Key is missing. Please check your environment variables.");
+    }
 } else if (getApps().length > 0) {
     // If the app is already initialized, we get the existing instance.
     app = getApp();
@@ -30,6 +33,6 @@ if (typeof window !== 'undefined' && !getApps().length) {
     db = getFirestore(app);
 }
 
-// We export the initialized services. In a server-only build environment, they might be undefined,
-// which is handled by client-side components that use them.
+// We export the initialized services. In a server-only build environment or if keys are missing, they might be undefined,
+// which should be handled by client-side components that use them.
 export { app, db, auth };
