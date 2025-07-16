@@ -12,16 +12,21 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-// This function ensures Firebase is initialized only once.
-function getFirebaseApp(): FirebaseApp {
-    if (getApps().length > 0) {
-        return getApp();
-    }
-    return initializeApp(firebaseConfig);
+let app: FirebaseApp;
+let auth: Auth;
+let db: Firestore;
+
+// This check ensures Firebase is only initialized on the client-side (in the browser).
+// Vercel's build process runs on the server, where `window` is not defined.
+if (typeof window !== 'undefined' && !getApps().length) {
+    app = initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    db = getFirestore(app);
+} else if (getApps().length > 0) {
+    app = getApp();
+    auth = getAuth(app);
+    db = getFirestore(app);
 }
 
-const app: FirebaseApp = getFirebaseApp();
-const db: Firestore = getFirestore(app);
-const auth: Auth = getAuth(app);
-
+// We export the initialized services. In a server-only environment, they will be undefined.
 export { app, db, auth };
